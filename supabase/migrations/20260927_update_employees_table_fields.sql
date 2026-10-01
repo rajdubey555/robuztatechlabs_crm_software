@@ -1,0 +1,16 @@
+-- Migration: Add detailed employee fields (Address, Bank, ID, Gender, DOB)
+ALTER TABLE public.employees
+ADD COLUMN IF NOT EXISTS display_name TEXT,
+ADD COLUMN IF NOT EXISTS alternate_phone TEXT,
+ADD COLUMN IF NOT EXISTS id_number TEXT,
+ADD COLUMN IF NOT EXISTS gender TEXT,
+ADD COLUMN IF NOT EXISTS dob DATE,
+ADD COLUMN IF NOT EXISTS address_line TEXT,
+ADD COLUMN IF NOT EXISTS region_state TEXT,
+ADD COLUMN IF NOT EXISTS city_town TEXT,
+ADD COLUMN IF NOT EXISTS postal_code TEXT,
+ADD COLUMN IF NOT EXISTS bank_account_name TEXT,
+ADD COLUMN IF NOT EXISTS bank_name TEXT,
+ADD COLUMN IF NOT EXISTS bank_branch TEXT,
+ADD COLUMN IF NOT EXISTS bank_account_number TEXT,
+ADD COLUMN IF NOT EXISTS bank_ifsc TEXT;

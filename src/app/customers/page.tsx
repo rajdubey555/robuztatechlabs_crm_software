@@ -1,0 +1,133 @@
+"use client";
+
+import { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import { Customer } from "@/types/customer";
+import { AppShell } from "@/components/layout/AppShell";
+import { Button, Alert, LoadingSpinner, EmptyState } from "@/components/ui";
+import { CustomerSearch } from "@/components/customers/CustomerSearch";
+import { CustomerTable } from "@/components/customers/CustomerTable";
+
+export default function CustomersListPage() {
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [userEmail, setUserEmail] = useState<string | undefined>();
+
+  const supabase = createClient();
+
+  useEffect(() => {
+    async function loadData() {
+      setLoading(true);
+      setError(null);
+
+      // Get user info for Navbar
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserEmail(user.email);
+      }
+
+      // Fetch customers ordered by created_at DESC
+      const { data, error: fetchError } = await supabase
+        .from("customers")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (fetchError) {
+        setError("Failed to load customers: " + fetchError.message);
+      } else {
+        setCustomers(data || []);
+      }
+      setLoading(false);
+    }
+
+    loadData();
+  }, [supabase]);
+
+  // Client-side search filtering by ID, Name, Phone, Email
+  const filteredCustomers = useMemo(() => {
+    if (!searchQuery.trim()) return customers;
+    const query = searchQuery.toLowerCase().trim();
+    return customers.filter(
+      (c) =>
+        c.customer_code.toLowerCase().includes(query) ||
+        c.full_name.toLowerCase().includes(query) ||
+        c.phone.toLowerCase().includes(query) ||
+        (c.email && c.email.toLowerCase().includes(query)) ||
+        (c.city && c.city.toLowerCase().includes(query))
+    );
+  }, [customers, searchQuery]);
+
+  return (
+    <AppShell userEmail={userEmail}>
+        {/* Page Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              Customers
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Manage client records for laptop and mobile repairs
+            </p>
+          </div>
+
+          <Link href="/customers/new">
+            <Button variant="primary" size="md">
+              <svg className="h-5 w-5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Customer
+            </Button>
+          </Link>
+        </div>
+
+        {/* Error Alert */}
+        {error && (
+          <Alert variant="error" onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
+
+        {/* Search Bar */}
+        <div className="flex items-center justify-between gap-4">
+          <CustomerSearch
+            searchTerm={searchQuery}
+            onSearchChange={setSearchQuery}
+          />
+        </div>
+
+        {/* Content Section */}
+        {loading ? (
+          <div className="flex justify-center items-center py-20">
+            <LoadingSpinner size="lg" className="text-[#009688]" />
+          </div>
+        ) : filteredCustomers.length > 0 ? (
+          <CustomerTable customers={filteredCustomers} />
+        ) : searchQuery ? (
+          <EmptyState
+            title="No matching customers found"
+            description={`No customer records match "${searchQuery}". Try searching with a different term.`}
+            action={
+              <Button variant="outline" size="sm" onClick={() => setSearchQuery("")}>
+                Clear Search
+              </Button>
+            }
+          />
+        ) : (
+          <EmptyState
+            title="No customers added yet"
+            description="Get started by creating your first customer record."
+            action={
+              <Link href="/customers/new">
+                <Button variant="primary" size="sm">
+                  + Add First Customer
+                </Button>
+              </Link>
+            }
+          />
+        )}
+    </AppShell>
+  );
+}
