@@ -48,6 +48,7 @@ export function EmployeeForm({
     full_name: initialData?.full_name || "",
     display_name: initialData?.display_name || "",
     email: initialData?.email || "",
+    password: initialData?.password || "",
     phone: initialData?.phone || "",
     alternate_phone: initialData?.alternate_phone || "",
     id_number: initialData?.id_number || "",
@@ -84,6 +85,9 @@ export function EmployeeForm({
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(formData.email.trim())) {
         newErrors.email = "Please enter a valid email address.";
+      }
+      if (formData.password && formData.password.length < 6) {
+        newErrors.password = "Password must be at least 6 characters long.";
       }
     }
 
@@ -156,12 +160,22 @@ export function EmployeeForm({
               />
 
               <Input
-                label="Email Address"
+                label="Email Address (Login ID)"
                 type="email"
-                placeholder="rahul@robuzta.com (Optional)"
+                placeholder="rahul@robuzta.com"
                 value={formData.email || ""}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 error={errors.email}
+                disabled={isLoading}
+              />
+
+              <Input
+                label="Login Password"
+                type="text"
+                placeholder="Set login password (min 6 chars)"
+                value={formData.password || ""}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                error={errors.password}
                 disabled={isLoading}
               />
 

@@ -9,6 +9,8 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Alert, Button } from "@/components/ui";
 import { EmployeeForm } from "@/components/employees/EmployeeForm";
 
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+
 export default function AddEmployeePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +33,31 @@ export default function AddEmployeePage() {
     setError(null);
 
     try {
+      // 1. Create Supabase Auth User if Email and Password are provided
+      if (formData.email && formData.password) {
+        const secondaryAuth = createSupabaseClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+          { auth: { persistSession: false } }
+        );
+
+        const { error: authError } = await secondaryAuth.auth.signUp({
+          email: formData.email.trim(),
+          password: formData.password.trim(),
+          options: {
+            data: {
+              full_name: formData.full_name.trim(),
+              role: formData.role,
+            },
+          },
+        });
+
+        if (authError && !authError.message.includes("already registered")) {
+          console.warn("Notice during auth user signup:", authError.message);
+        }
+      }
+
+      // 2. Insert into employees DB table
       const payload = {
         full_name: formData.full_name.trim(),
         display_name: formData.display_name?.trim() || null,

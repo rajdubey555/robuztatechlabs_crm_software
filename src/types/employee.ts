@@ -49,6 +49,7 @@ export interface EmployeeFormData {
   phone?: string;
   alternate_phone?: string;
   email?: string;
+  password?: string;
   id_number?: string;
   gender?: string;
   dob?: string;
@@ -70,6 +71,7 @@ export interface EmployeeFormErrors {
   full_name?: string;
   phone?: string;
   email?: string;
+  password?: string;
   role?: string;
 }
 
