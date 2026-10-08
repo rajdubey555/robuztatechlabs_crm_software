@@ -33,7 +33,11 @@ export default function LoginPage() {
       });
 
       if (authError) {
-        setError(authError.message);
+        if (authError.message.toLowerCase().includes("email not confirmed")) {
+          setError("Email is not confirmed yet. In Supabase Dashboard -> Authentication -> Providers -> Email, turn OFF 'Confirm Email' setting to allow direct logins.");
+        } else {
+          setError(authError.message);
+        }
         setLoading(false);
         return;
       }
