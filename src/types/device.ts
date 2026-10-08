@@ -5,6 +5,7 @@ export type DeviceType =
   | "iPhone"
   | "Android Phone"
   | "Tablet"
+  | "Drone"
   | "Other";
 
 export interface DeviceAttachment {
@@ -22,6 +23,8 @@ export interface Device {
   device_code: string;
   customer_id: string;
   device_type: DeviceType;
+  category_type?: "laptop_general" | "drone";
+  branch?: "south_bopal" | "tragad";
   brand: string;
   model: string;
   serial_number?: string | null;
@@ -47,6 +50,8 @@ export interface Device {
 export interface DeviceFormData {
   customer_id: string;
   device_type: DeviceType;
+  category_type?: "laptop_general" | "drone";
+  branch?: "south_bopal" | "tragad";
   brand: string;
   model: string;
   serial_number?: string;

@@ -10,6 +10,7 @@ import { Button, Alert, LoadingSpinner, Badge, Card, CardHeader, CardTitle, Card
 import { EmployeeRoleBadge } from "@/components/employees/EmployeeRoleBadge";
 import { JobStatusBadge } from "@/components/jobs/JobStatusBadge";
 import { JobPriorityBadge } from "@/components/jobs/JobPriorityBadge";
+import { BRANCHES } from "@/types/branch";
 
 export default function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -129,6 +130,11 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                   <Badge variant="success">Active</Badge>
                 ) : (
                   <Badge variant="default">Inactive</Badge>
+                )}
+                {(employee as unknown as { branch?: string }).branch && (
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${BRANCHES[(employee as unknown as { branch: "south_bopal" | "tragad" }).branch]?.badgeColor || "bg-teal-50 text-teal-800 border-teal-300"}`}>
+                    📍 {(employee as unknown as { branch: string }).branch === "both" ? "Both Branches" : BRANCHES[(employee as unknown as { branch: "south_bopal" | "tragad" }).branch]?.shortName || (employee as unknown as { branch: string }).branch}
+                  </span>
                 )}
               </div>
               <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400 mt-1">

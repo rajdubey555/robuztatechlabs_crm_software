@@ -89,11 +89,16 @@ interface PartRequestsPageClientProps {
   userEmail?: string;
 }
 
+import { useBranchContext } from "@/context/BranchContext";
+import { BRANCHES, CATEGORIES } from "@/types/branch";
+
 export function PartRequestsPageClient({
   initialRequests = [],
   initialVendors = [],
   userEmail,
 }: PartRequestsPageClientProps) {
+  const { selectedBranch, selectedCategory } = useBranchContext();
+
   const [requests, setRequests] = useState<PartRequest[]>(initialRequests);
   const [vendors, setVendors] = useState<Vendor[]>(initialVendors);
   const [loading, setLoading] = useState(false);
@@ -146,8 +151,11 @@ export function PartRequestsPageClient({
     fetchData();
   }, []);
 
-  // Filter requests
+  // Filter requests (including Branch & Category context)
   const filteredRequests = requests.filter((req) => {
+    if (selectedBranch !== "all" && (req as unknown as { branch?: string }).branch && (req as unknown as { branch?: string }).branch !== selectedBranch) return false;
+    if (selectedCategory !== "all" && (req as unknown as { category_type?: string }).category_type && (req as unknown as { category_type?: string }).category_type !== selectedCategory) return false;
+
     const matchesSearch =
       req.part_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       req.request_code.toLowerCase().includes(searchQuery.toLowerCase()) ||

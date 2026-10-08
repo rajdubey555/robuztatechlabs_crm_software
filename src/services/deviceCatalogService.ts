@@ -69,12 +69,19 @@ export const DEFAULT_CATALOG: CatalogItem[] = [
   { id: "def-50", device_type: "Laptop", brand: "Asus", model: "ROG Strix G15" },
   { id: "def-51", device_type: "Laptop", brand: "Asus", model: "TUF Gaming F15" },
   { id: "def-52", device_type: "Laptop", brand: "Asus", model: "ZenBook 14 OLED" },
-  { id: "def-53", device_type: "Laptop", brand: "Asus", model: "VivoBook 15" },
-  // Others
-  { id: "def-54", device_type: "Android Phone", brand: "OnePlus", model: "OnePlus 11 5G" },
-  { id: "def-55", device_type: "Android Phone", brand: "OnePlus", model: "OnePlus 12" },
   { id: "def-56", device_type: "Android Phone", brand: "Xiaomi", model: "Redmi Note 12 Pro" },
   { id: "def-57", device_type: "Android Phone", brand: "Realme", model: "Realme 11 Pro+" },
+
+  // Drones
+  { id: "def-58", device_type: "Drone", brand: "DJI", model: "Mavic 3 Pro" },
+  { id: "def-59", device_type: "Drone", brand: "DJI", model: "Mini 4 Pro" },
+  { id: "def-60", device_type: "Drone", brand: "DJI", model: "Air 3" },
+  { id: "def-61", device_type: "Drone", brand: "DJI", model: "Avata 2 FPV" },
+  { id: "def-62", device_type: "Drone", brand: "DJI", model: "Phantom 4 Pro V2.0" },
+  { id: "def-63", device_type: "Drone", brand: "DJI", model: "Inspire 3" },
+  { id: "def-64", device_type: "Drone", brand: "Autel Robotics", model: "EVO II Dual 640T" },
+  { id: "def-65", device_type: "Drone", brand: "Skydio", model: "Skydio 2+ Enterprise" },
+  { id: "def-66", device_type: "Drone", brand: "Parrot", model: "Anafi USA" },
 ];
 
 export async function fetchDeviceCatalog(): Promise<CatalogItem[]> {

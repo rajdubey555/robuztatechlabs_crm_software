@@ -18,6 +18,7 @@ import { DiagnosisModal } from "@/components/diagnosis/DiagnosisModal";
 import { CreatePartRequestModal } from "@/components/partRequests/CreatePartRequestModal";
 import { PartRequestList } from "@/components/partRequests/PartRequestList";
 import { PartRequestSummaryCard } from "@/components/partRequests/PartRequestSummaryCard";
+import { BRANCHES, CATEGORIES } from "@/types/branch";
 
 const VALID_STATUSES: { label: string; value: JobStatus }[] = [
   { label: "Received", value: "received" },
@@ -226,6 +227,16 @@ export default function JobDetailPage() {
                   <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white font-mono tracking-tight">
                     {job.job_code}
                   </h1>
+                  {job.branch && (
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${BRANCHES[job.branch]?.badgeColor || ""}`}>
+                      📍 {BRANCHES[job.branch]?.name || job.branch}
+                    </span>
+                  )}
+                  {job.category_type && (
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${CATEGORIES[job.category_type]?.badgeColor || ""}`}>
+                      {CATEGORIES[job.category_type]?.icon} {CATEGORIES[job.category_type]?.name || job.category_type}
+                    </span>
+                  )}
                   <JobStatusBadge status={job.status} />
                   <JobPriorityBadge priority={job.priority} />
                   {isDiagnosed ? (

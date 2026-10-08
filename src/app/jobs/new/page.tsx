@@ -91,6 +91,8 @@ function NewJobContent() {
           {
             customer_id: formData.customer_id,
             device_id: formData.device_id,
+            branch: formData.branch || "south_bopal",
+            category_type: formData.category_type || "laptop_general",
             customer_complaint: formData.customer_complaint.trim(),
             priority: formData.priority,
             status: "received",

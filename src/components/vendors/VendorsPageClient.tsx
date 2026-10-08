@@ -7,6 +7,7 @@ import { VendorModal } from "./VendorModal";
 import { createClient } from "@/lib/supabase/client";
 import { buildWhatsAppClickUrl } from "@/services/whatsappService";
 import { Modal, Button } from "@/components/ui";
+import { useBranchContext } from "@/context/BranchContext";
 
 // Inline SVG Icon Helpers
 function IconVendorStore({ className = "" }: { className?: string }) {
@@ -81,6 +82,7 @@ interface VendorsPageClientProps {
 }
 
 export function VendorsPageClient({ initialVendors = [], userEmail }: VendorsPageClientProps) {
+  const { selectedBranch, selectedCategory, activeBranchInfo, activeCategoryInfo, isFiltered, clearFilters } = useBranchContext();
   const [vendors, setVendors] = useState<Vendor[]>(initialVendors);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -227,6 +229,34 @@ export function VendorsPageClient({ initialVendors = [], userEmail }: VendorsPag
           </button>
         </div>
       </div>
+
+      {/* Active Filter Context Banner */}
+      {isFiltered && (
+        <div className="flex items-center justify-between bg-teal-50/80 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-900 rounded-xl px-4 py-2.5 text-xs text-teal-800 dark:text-teal-200">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold">Active Workspace Filter:</span>
+            {selectedBranch !== "all" && (
+              <span className="bg-teal-100 dark:bg-teal-900 font-semibold px-2 py-0.5 rounded-md border border-teal-300 dark:border-teal-700">
+                📍 {activeBranchInfo?.name || selectedBranch}
+              </span>
+            )}
+            {selectedCategory !== "all" && (
+              <span className="bg-teal-100 dark:bg-teal-900 font-semibold px-2 py-0.5 rounded-md border border-teal-300 dark:border-teal-700">
+                {activeCategoryInfo?.icon} {activeCategoryInfo?.name || selectedCategory}
+              </span>
+            )}
+            <span className="text-teal-600 dark:text-teal-400">
+              (Viewing verified vendors directory for active context)
+            </span>
+          </div>
+          <button
+            onClick={clearFilters}
+            className="text-xs text-teal-700 hover:text-teal-900 dark:text-teal-300 underline font-bold"
+          >
+            Clear Filters
+          </button>
+        </div>
+      )}
 
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

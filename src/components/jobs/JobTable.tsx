@@ -3,6 +3,7 @@ import { RepairJob } from "@/types/job";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, Badge, Button } from "@/components/ui";
 import { JobStatusBadge } from "./JobStatusBadge";
 import { JobPriorityBadge } from "./JobPriorityBadge";
+import { BRANCHES, CATEGORIES } from "@/types/branch";
 
 export interface JobTableProps {
   jobs: RepairJob[];
@@ -30,25 +31,35 @@ export function JobTable({ jobs }: JobTableProps) {
           <TableHeader>
             <TableRow>
               <TableHead>Job ID</TableHead>
+              <TableHead>Branch & Category</TableHead>
               <TableHead>Customer</TableHead>
               <TableHead>Device</TableHead>
               <TableHead>Technician</TableHead>
               <TableHead>Complaint</TableHead>
-              <TableHead>Diagnosis</TableHead>
               <TableHead>Priority</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Received</TableHead>
               <TableHead className="text-right">Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {jobs.map((job) => {
-              const isDiagnosed = job.status === "diagnosed" || Boolean(job.latest_diagnosis) || (job.diagnoses && job.diagnoses.length > 0);
+              const branchInfo = job.branch ? BRANCHES[job.branch] : BRANCHES["south_bopal"];
+              const catInfo = job.category_type ? CATEGORIES[job.category_type] : CATEGORIES["laptop_general"];
 
               return (
                 <TableRow key={job.id}>
                   <TableCell className="font-mono text-xs font-semibold">
                     <Badge variant="primary">{job.job_code}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border w-max ${branchInfo.badgeColor}`}>
+                        📍 {branchInfo.shortName}
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border w-max ${catInfo.badgeColor}`}>
+                        {catInfo.icon} {catInfo.shortName}
+                      </span>
+                    </div>
                   </TableCell>
                   <TableCell>
                     {job.customer ? (
@@ -98,24 +109,14 @@ export function JobTable({ jobs }: JobTableProps) {
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell className="max-w-xs xl:max-w-md text-slate-700 dark:text-slate-300 line-clamp-2" title={job.customer_complaint}>
+                  <TableCell className="max-w-xs text-slate-700 dark:text-slate-300 line-clamp-2" title={job.customer_complaint}>
                     {job.customer_complaint}
-                  </TableCell>
-                  <TableCell>
-                    {isDiagnosed ? (
-                      <Badge variant="success">Diagnosed</Badge>
-                    ) : (
-                      <Badge variant="warning">Pending</Badge>
-                    )}
                   </TableCell>
                   <TableCell>
                     <JobPriorityBadge priority={job.priority} />
                   </TableCell>
                   <TableCell>
                     <JobStatusBadge status={job.status} />
-                  </TableCell>
-                  <TableCell className="text-xs text-slate-500">
-                    {formatDate(job.received_at)}
                   </TableCell>
                   <TableCell className="text-right">
                     <Link href={`/jobs/${job.id}`}>
@@ -134,22 +135,23 @@ export function JobTable({ jobs }: JobTableProps) {
       {/* Mobile Card List View */}
       <div className="sm:hidden space-y-3">
         {jobs.map((job) => {
-          const isDiagnosed = job.status === "diagnosed" || Boolean(job.latest_diagnosis) || (job.diagnoses && job.diagnoses.length > 0);
+          const branchInfo = job.branch ? BRANCHES[job.branch] : BRANCHES["south_bopal"];
+          const catInfo = job.category_type ? CATEGORIES[job.category_type] : CATEGORIES["laptop_general"];
 
           return (
             <div
               key={job.id}
               className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900 space-y-3"
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-1">
                 <Badge variant="primary">{job.job_code}</Badge>
-                <div className="flex items-center gap-1.5">
-                  {isDiagnosed ? (
-                    <Badge variant="success">Diagnosed</Badge>
-                  ) : (
-                    <Badge variant="warning">Pending Diag</Badge>
-                  )}
-                  <JobStatusBadge status={job.status} />
+                <div className="flex items-center gap-1">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${branchInfo.badgeColor}`}>
+                    📍 {branchInfo.shortName}
+                  </span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${catInfo.badgeColor}`}>
+                    {catInfo.icon} {catInfo.shortName}
+                  </span>
                 </div>
               </div>
 

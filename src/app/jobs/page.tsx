@@ -9,8 +9,11 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Button, Alert, LoadingSpinner, EmptyState } from "@/components/ui";
 import { JobSearch } from "@/components/jobs/JobSearch";
 import { JobTable } from "@/components/jobs/JobTable";
+import { useBranchContext } from "@/context/BranchContext";
 
 export default function JobsListPage() {
+  const { selectedBranch, selectedCategory, activeBranchInfo, activeCategoryInfo, isFiltered, clearFilters } = useBranchContext();
+
   const [jobs, setJobs] = useState<RepairJob[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -109,9 +112,15 @@ export default function JobsListPage() {
     }));
   }, [employees]);
 
-  // Search & Filter logic
+  // Search & Filter logic (Including Branch & Category context)
   const filteredJobs = useMemo(() => {
     return jobs.filter((j) => {
+      // Branch Context Filter
+      if (selectedBranch !== "all" && j.branch && j.branch !== selectedBranch) return false;
+
+      // Category Context Filter
+      if (selectedCategory !== "all" && j.category_type && j.category_type !== selectedCategory) return false;
+
       // 1. Status Filter
       if (statusFilter && j.status !== statusFilter) return false;
 
@@ -160,10 +169,10 @@ export default function JobsListPage() {
         techCode.includes(q)
       );
     });
-  }, [jobs, searchQuery, statusFilter, priorityFilter, assignmentFilter, employeeFilter, diagnosisFilter]);
+  }, [jobs, selectedBranch, selectedCategory, searchQuery, statusFilter, priorityFilter, assignmentFilter, employeeFilter, diagnosisFilter]);
 
   const hasActiveFilters = Boolean(
-    searchQuery || statusFilter || priorityFilter || assignmentFilter || employeeFilter || diagnosisFilter
+    searchQuery || statusFilter || priorityFilter || assignmentFilter || employeeFilter || diagnosisFilter || isFiltered
   );
 
   const resetFilters = () => {
@@ -173,84 +182,97 @@ export default function JobsListPage() {
     setAssignmentFilter("");
     setEmployeeFilter("");
     setDiagnosisFilter("");
+    clearFilters();
   };
 
   return (
     <AppShell userEmail={userEmail}>
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               Repair Jobs
             </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Track job cards, diagnoses, technician assignments, complaints, and repair intake statuses
-            </p>
+            {activeBranchInfo && (
+              <span className={`px-3 py-1 rounded-full text-xs font-bold border ${activeBranchInfo.badgeColor}`}>
+                📍 {activeBranchInfo.shortName}
+              </span>
+            )}
+            {activeCategoryInfo && (
+              <span className={`px-3 py-1 rounded-full text-xs font-bold border ${activeCategoryInfo.badgeColor}`}>
+                {activeCategoryInfo.icon} {activeCategoryInfo.name}
+              </span>
+            )}
           </div>
-
-          <Link href="/jobs/new">
-            <Button variant="primary" size="md">
-              <svg className="h-5 w-5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Create Job Card
-            </Button>
-          </Link>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            Track job cards, diagnoses, technician assignments, complaints, and repair intake statuses
+          </p>
         </div>
 
-        {error && (
-          <Alert variant="error" onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
+        <Link href="/jobs/new">
+          <Button variant="primary" size="md">
+            <svg className="h-5 w-5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Create Job Card
+          </Button>
+        </Link>
+      </div>
 
-        {/* Search & Filter */}
-        <JobSearch
-          searchTerm={searchQuery}
-          onSearchChange={setSearchQuery}
-          selectedStatus={statusFilter}
-          onStatusChange={setStatusFilter}
-          selectedPriority={priorityFilter}
-          onPriorityChange={setPriorityFilter}
-          assignmentFilter={assignmentFilter}
-          onAssignmentFilterChange={setAssignmentFilter}
-          employeeFilter={employeeFilter}
-          onEmployeeFilterChange={setEmployeeFilter}
-          diagnosisFilter={diagnosisFilter}
-          onDiagnosisFilterChange={setDiagnosisFilter}
-          employeeOptions={employeeOptions}
+      {error && (
+        <Alert variant="error" onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      {/* Search & Filter */}
+      <JobSearch
+        searchTerm={searchQuery}
+        onSearchChange={setSearchQuery}
+        selectedStatus={statusFilter}
+        onStatusChange={setStatusFilter}
+        selectedPriority={priorityFilter}
+        onPriorityChange={setPriorityFilter}
+        assignmentFilter={assignmentFilter}
+        onAssignmentFilterChange={setAssignmentFilter}
+        employeeFilter={employeeFilter}
+        onEmployeeFilterChange={setEmployeeFilter}
+        diagnosisFilter={diagnosisFilter}
+        onDiagnosisFilterChange={setDiagnosisFilter}
+        employeeOptions={employeeOptions}
+      />
+
+      {/* Content */}
+      {loading ? (
+        <div className="flex justify-center items-center py-20">
+          <LoadingSpinner size="lg" className="text-[#009688]" />
+        </div>
+      ) : filteredJobs.length > 0 ? (
+        <JobTable jobs={filteredJobs} />
+      ) : hasActiveFilters ? (
+        <EmptyState
+          title="No matching repair jobs found"
+          description="No repair jobs match your current search, branch, or category filter criteria."
+          action={
+            <Button variant="outline" size="sm" onClick={resetFilters}>
+              Clear All Filters
+            </Button>
+          }
         />
-
-        {/* Content */}
-        {loading ? (
-          <div className="flex justify-center items-center py-20">
-            <LoadingSpinner size="lg" className="text-[#009688]" />
-          </div>
-        ) : filteredJobs.length > 0 ? (
-          <JobTable jobs={filteredJobs} />
-        ) : hasActiveFilters ? (
-          <EmptyState
-            title="No matching repair jobs found"
-            description="No repair jobs match your current search and filter criteria."
-            action={
-              <Button variant="outline" size="sm" onClick={resetFilters}>
-                Clear All Filters
+      ) : (
+        <EmptyState
+          title="No repair jobs created yet"
+          description="Create your first repair job card to start tracking device repairs."
+          action={
+            <Link href="/jobs/new">
+              <Button variant="primary" size="sm">
+                + Create First Job Card
               </Button>
-            }
-          />
-        ) : (
-          <EmptyState
-            title="No repair jobs created yet"
-            description="Create your first repair job card to start tracking device repairs."
-            action={
-              <Link href="/jobs/new">
-                <Button variant="primary" size="sm">
-                  + Create First Job Card
-                </Button>
-              </Link>
-            }
-          />
-        )}
+            </Link>
+          }
+        />
+      )}
     </AppShell>
   );
 }

@@ -7,6 +7,7 @@ export interface Customer {
   email?: string | null;
   address?: string | null;
   city?: string | null;
+  branch?: "south_bopal" | "tragad" | "both" | null;
   notes?: string | null;
   created_at: string;
   updated_at: string;
@@ -19,6 +20,7 @@ export interface CustomerFormData {
   email?: string;
   address?: string;
   city?: string;
+  branch?: "south_bopal" | "tragad" | "both";
   notes?: string;
 }
 

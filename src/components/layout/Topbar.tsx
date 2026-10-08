@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Input } from "@/components/ui";
+import { useBranchContext } from "@/context/BranchContext";
+import { BRANCHES, CATEGORIES, BranchId, CategoryType } from "@/types/branch";
 
 export interface TopbarProps {
   userEmail?: string;
@@ -21,11 +23,20 @@ export function Topbar({
 }: TopbarProps) {
   const router = useRouter();
   const supabase = createClient();
+  const {
+    selectedBranch,
+    selectedCategory,
+    setSelectedBranch,
+    setSelectedCategory,
+    isFiltered,
+    clearFilters,
+  } = useBranchContext();
 
   const [globalSearch, setGlobalSearch] = useState("");
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,10 +54,10 @@ export function Topbar({
 
   return (
     <header className="sticky top-0 z-20 h-16 w-full border-b border-slate-200 bg-white/95 backdrop-blur-xs dark:border-slate-800 dark:bg-slate-900/95 transition-all">
-      <div className="flex h-full items-center justify-between px-4 sm:px-6">
+      <div className="flex h-full items-center justify-between px-3 sm:px-6 gap-2">
         
         {/* Left Side: Mobile Menu Button & Global Search */}
-        <div className="flex items-center gap-3 flex-1 max-w-xl">
+        <div className="flex items-center gap-2 sm:gap-3 flex-1 max-w-md">
           {/* Mobile Hamburger Toggle */}
           <button
             onClick={onOpenMobileSidebar}
@@ -70,9 +81,9 @@ export function Topbar({
           </button>
 
           {/* Global Search Bar */}
-          <form onSubmit={handleSearchSubmit} className="hidden sm:block flex-1 max-w-md">
+          <form onSubmit={handleSearchSubmit} className="hidden xl:block flex-1 max-w-sm">
             <Input
-              placeholder="Global Search (Job ID, Customer, Phone, Device)..."
+              placeholder="Search Job ID, Customer, Phone..."
               value={globalSearch}
               onChange={(e) => setGlobalSearch(e.target.value)}
               startIcon={
@@ -84,8 +95,143 @@ export function Topbar({
           </form>
         </div>
 
+        {/* Center: Branch Selector & Category Switcher */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          
+          {/* Branch Dropdown Selector */}
+          <div className="relative">
+            <button
+              onClick={() => setBranchDropdownOpen(!branchDropdownOpen)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold shadow-xs transition-all ${
+                selectedBranch === "all"
+                  ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-slate-300"
+                  : selectedBranch === "south_bopal"
+                  ? "bg-emerald-50 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-200 border-emerald-300 dark:border-emerald-700"
+                  : "bg-sky-50 dark:bg-sky-950/70 text-sky-800 dark:text-sky-200 border-sky-300 dark:border-sky-700"
+              }`}
+            >
+              <span className="text-sm">🏢</span>
+              <span className="hidden sm:inline-block max-w-[130px] md:max-w-[160px] truncate">
+                {selectedBranch === "all"
+                  ? "All Lab Branches"
+                  : BRANCHES[selectedBranch].shortName}
+              </span>
+              <span className="sm:hidden font-bold">
+                {selectedBranch === "all" ? "All" : selectedBranch === "south_bopal" ? "Bopal" : "Tragad"}
+              </span>
+              <svg className={`h-3.5 w-3.5 transition-transform ${branchDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {branchDropdownOpen && (
+              <div className="absolute left-0 sm:right-0 sm:left-auto mt-2 w-72 rounded-2xl bg-white p-2 shadow-2xl border border-slate-200 dark:border-slate-800 dark:bg-slate-900 z-50 space-y-1">
+                <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  Select Active Lab Branch
+                </div>
+
+                <button
+                  onClick={() => {
+                    setSelectedBranch("all");
+                    setBranchDropdownOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
+                    selectedBranch === "all"
+                      ? "bg-slate-100 dark:bg-slate-800 font-bold text-slate-900 dark:text-white"
+                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🏢</span>
+                    <div className="text-left">
+                      <div className="font-semibold">All Lab Locations</div>
+                      <div className="text-[10px] text-slate-500">Overview of South Bopal & Tragad</div>
+                    </div>
+                  </div>
+                  {selectedBranch === "all" && <span className="text-emerald-500 font-bold">✓</span>}
+                </button>
+
+                {Object.values(BRANCHES).map((branch) => (
+                  <button
+                    key={branch.id}
+                    onClick={() => {
+                      setSelectedBranch(branch.id);
+                      setBranchDropdownOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors ${
+                      selectedBranch === branch.id
+                        ? "bg-slate-100 dark:bg-slate-800 font-bold text-slate-900 dark:text-white"
+                        : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">📍</span>
+                      <div className="text-left">
+                        <div className="font-semibold">{branch.name}</div>
+                        <div className="text-[10px] text-slate-500 line-clamp-1">{branch.subtitle}</div>
+                      </div>
+                    </div>
+                    {selectedBranch === branch.id && <span className="text-emerald-500 font-bold">✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Category Switcher Tabs */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+            <button
+              onClick={() => setSelectedCategory("all")}
+              className={`px-2 py-1 rounded-lg text-xs font-semibold transition-all ${
+                selectedCategory === "all"
+                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs"
+                  : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+              }`}
+              title="All Categories"
+            >
+              All
+            </button>
+            <button
+              onClick={() => setSelectedCategory("laptop_general")}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                selectedCategory === "laptop_general"
+                  ? "bg-indigo-600 text-white shadow-xs"
+                  : "text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400"
+              }`}
+              title="Laptop & General Repairs"
+            >
+              <span>💻</span>
+              <span className="hidden md:inline">Laptop</span>
+            </button>
+            <button
+              onClick={() => setSelectedCategory("drone")}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                selectedCategory === "drone"
+                  ? "bg-purple-600 text-white shadow-xs"
+                  : "text-slate-600 dark:text-slate-300 hover:text-purple-600 dark:hover:text-purple-400"
+              }`}
+              title="Drone Repair Hub"
+            >
+              <span>🛸</span>
+              <span className="hidden md:inline">Drone</span>
+            </button>
+          </div>
+
+          {/* Reset Filter Button if active */}
+          {isFiltered && (
+            <button
+              onClick={clearFilters}
+              className="hidden lg:flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 rounded-lg transition-colors border border-amber-200 dark:border-amber-800"
+              title="Reset Filters"
+            >
+              <span>✕</span> Reset
+            </button>
+          )}
+
+        </div>
+
         {/* Right Side: Quick Actions, Notifications & Profile */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           
           {/* Quick Create Dropdown */}
           <div className="relative">
@@ -155,7 +301,7 @@ export function Topbar({
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#009688] text-white font-bold text-xs">
                 {userEmail ? userEmail[0].toUpperCase() : "U"}
               </div>
-              <span className="hidden sm:inline-block text-xs font-semibold text-slate-700 dark:text-slate-300 max-w-[120px] truncate">
+              <span className="hidden sm:inline-block text-xs font-semibold text-slate-700 dark:text-slate-300 max-w-[100px] truncate">
                 {userEmail || "Staff User"}
               </span>
             </button>

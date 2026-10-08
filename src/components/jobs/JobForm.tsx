@@ -5,6 +5,8 @@ import { RepairJobFormData, RepairJobFormErrors, JobPriority } from "@/types/job
 import { Customer } from "@/types/customer";
 import { Device } from "@/types/device";
 import { Input, Select, Button, Card, CardContent } from "@/components/ui";
+import { useBranchContext } from "@/context/BranchContext";
+import { BRANCHES, CATEGORIES } from "@/types/branch";
 
 export interface JobFormProps {
   customers: Customer[];
@@ -23,6 +25,16 @@ const PRIORITY_OPTIONS: { label: string; value: JobPriority }[] = [
   { label: "Low", value: "low" },
 ];
 
+const BRANCH_OPTIONS = [
+  { label: `📍 ${BRANCHES.south_bopal.name}`, value: "south_bopal" },
+  { label: `📍 ${BRANCHES.tragad.name}`, value: "tragad" },
+];
+
+const CATEGORY_OPTIONS = [
+  { label: `💻 ${CATEGORIES.laptop_general.name}`, value: "laptop_general" },
+  { label: `🛸 ${CATEGORIES.drone.name}`, value: "drone" },
+];
+
 export function JobForm({
   customers,
   allDevices,
@@ -32,9 +44,13 @@ export function JobForm({
   submitButtonText = "Create Job Card",
   isEdit = false,
 }: JobFormProps) {
+  const { selectedBranch, selectedCategory } = useBranchContext();
+
   const [formData, setFormData] = useState<RepairJobFormData>({
     customer_id: initialData?.customer_id || (customers[0]?.id || ""),
     device_id: initialData?.device_id || "",
+    branch: initialData?.branch || (selectedBranch !== "all" ? selectedBranch : "south_bopal"),
+    category_type: initialData?.category_type || (selectedCategory !== "all" ? selectedCategory : "laptop_general"),
     customer_complaint: initialData?.customer_complaint || "",
     priority: initialData?.priority || "medium",
     estimated_cost: initialData?.estimated_cost !== undefined && initialData?.estimated_cost !== null ? String(initialData.estimated_cost) : "",
@@ -100,7 +116,6 @@ export function JobForm({
     if (formData.expected_delivery_at) {
       const deliveryDate = new Date(formData.expected_delivery_at);
       const now = new Date();
-      // allow same day
       if (deliveryDate.getTime() < now.getTime() - 86400000) {
         newErrors.expected_delivery_at = "Expected delivery cannot be in the past.";
       }
@@ -131,6 +146,31 @@ export function JobForm({
       <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            {/* Lab Branch Selection */}
+            <Select
+              label="Assigned Lab Branch *"
+              required
+              disabled={isLoading}
+              options={BRANCH_OPTIONS}
+              value={formData.branch || "south_bopal"}
+              onChange={(e) =>
+                setFormData({ ...formData, branch: e.target.value as "south_bopal" | "tragad" })
+              }
+            />
+
+            {/* Service Category Selection */}
+            <Select
+              label="Repair Category Type *"
+              required
+              disabled={isLoading}
+              options={CATEGORY_OPTIONS}
+              value={formData.category_type || "laptop_general"}
+              onChange={(e) =>
+                setFormData({ ...formData, category_type: e.target.value as "laptop_general" | "drone" })
+              }
+            />
+
             {/* Customer Select */}
             <Select
               label="Customer *"
@@ -238,7 +278,7 @@ export function JobForm({
               <textarea
                 rows={4}
                 required
-                placeholder="Describe the issue reported by the customer in detail (e.g. Laptop not turning on, battery draining fast, display flickering)"
+                placeholder="Describe the issue reported by the customer in detail (e.g. Laptop not turning on, Drone camera gimbal error, battery connection issue)"
                 value={formData.customer_complaint}
                 onChange={(e) =>
                   setFormData({ ...formData, customer_complaint: e.target.value })

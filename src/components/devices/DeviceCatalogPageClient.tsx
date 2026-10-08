@@ -67,12 +67,26 @@ interface DeviceCatalogPageClientProps {
   userEmail?: string;
 }
 
+import { useBranchContext } from "@/context/BranchContext";
+
 export function DeviceCatalogPageClient({ userEmail }: DeviceCatalogPageClientProps) {
+  const { selectedCategory } = useBranchContext();
+
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTypeFilter, setSelectedTypeFilter] = useState("ALL");
   const [selectedBrandFilter, setSelectedBrandFilter] = useState("ALL");
+
+  useEffect(() => {
+    if (selectedCategory === "drone") {
+      setSelectedTypeFilter("Drone");
+    } else if (selectedCategory === "laptop_general") {
+      setSelectedTypeFilter("Laptop");
+    } else {
+      setSelectedTypeFilter("ALL");
+    }
+  }, [selectedCategory]);
 
   // Selection State for Bulk Operations
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);

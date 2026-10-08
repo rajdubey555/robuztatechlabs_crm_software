@@ -16,6 +16,8 @@ export interface RepairJob {
   customer_id: string;
   device_id: string;
   assigned_employee_id?: string | null;
+  branch?: "south_bopal" | "tragad";
+  category_type?: "laptop_general" | "drone";
   customer_complaint: string;
   priority: JobPriority;
   status: JobStatus;
@@ -52,6 +54,8 @@ export interface RepairJob {
 export interface RepairJobFormData {
   customer_id: string;
   device_id: string;
+  branch?: "south_bopal" | "tragad";
+  category_type?: "laptop_general" | "drone";
   customer_complaint: string;
   priority: JobPriority;
   estimated_cost?: number | string;

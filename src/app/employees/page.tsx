@@ -8,8 +8,11 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Button, Alert, LoadingSpinner, EmptyState } from "@/components/ui";
 import { EmployeeSearch } from "@/components/employees/EmployeeSearch";
 import { EmployeeTable } from "@/components/employees/EmployeeTable";
+import { useBranchContext } from "@/context/BranchContext";
 
 export default function EmployeesListPage() {
+  const { selectedBranch, selectedCategory, activeBranchInfo, activeCategoryInfo, isFiltered, clearFilters } = useBranchContext();
+
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,9 +86,14 @@ export default function EmployeesListPage() {
     loadData();
   }, [supabase]);
 
-  // Client-side multi-field filtering
+  // Client-side multi-field filtering (including Branch context)
   const filteredEmployees = useMemo(() => {
     return employees.filter((emp) => {
+      // Branch context filter
+      if (selectedBranch !== "all" && (emp as unknown as { branch?: string }).branch && (emp as unknown as { branch?: string }).branch !== "both" && (emp as unknown as { branch?: string }).branch !== selectedBranch) {
+        return false;
+      }
+
       // Search term filter (Name, EMP Code, Phone)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -111,10 +119,10 @@ export default function EmployeesListPage() {
 
       return true;
     });
-  }, [employees, searchQuery, selectedRole, selectedStatus, selectedSpecialization]);
+  }, [employees, selectedBranch, searchQuery, selectedRole, selectedStatus, selectedSpecialization]);
 
   const hasActiveFilters = Boolean(
-    searchQuery.trim() || selectedRole || selectedStatus || selectedSpecialization
+    searchQuery.trim() || selectedRole || selectedStatus || selectedSpecialization || isFiltered
   );
 
   const resetFilters = () => {
@@ -122,80 +130,88 @@ export default function EmployeesListPage() {
     setSelectedRole("");
     setSelectedStatus("");
     setSelectedSpecialization("");
+    clearFilters();
   };
 
   return (
     <AppShell userEmail={userEmail}>
-        {/* Page Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               Employee Management
             </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Manage staff profiles, roles, specializations, and job assignments
-            </p>
+            {activeBranchInfo && (
+              <span className={`px-3 py-1 rounded-full text-xs font-bold border ${activeBranchInfo.badgeColor}`}>
+                📍 {activeBranchInfo.shortName}
+              </span>
+            )}
           </div>
-
-          <Link href="/employees/new">
-            <Button variant="primary" size="md">
-              <svg className="h-5 w-5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Add Employee
-            </Button>
-          </Link>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            Manage staff profiles, branch assignments, Drone/Laptop specializations, and job workloads
+          </p>
         </div>
 
-        {/* Error Alert */}
-        {error && (
-          <Alert variant="error" onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
+        <Link href="/employees/new">
+          <Button variant="primary" size="md">
+            <svg className="h-5 w-5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Employee
+          </Button>
+        </Link>
+      </div>
 
-        {/* Filters */}
-        <EmployeeSearch
-          searchTerm={searchQuery}
-          onSearchChange={setSearchQuery}
-          selectedRole={selectedRole}
-          onRoleChange={setSelectedRole}
-          selectedStatus={selectedStatus}
-          onStatusChange={setSelectedStatus}
-          selectedSpecialization={selectedSpecialization}
-          onSpecializationChange={setSelectedSpecialization}
+      {/* Error Alert */}
+      {error && (
+        <Alert variant="error" onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      {/* Filters */}
+      <EmployeeSearch
+        searchTerm={searchQuery}
+        onSearchChange={setSearchQuery}
+        selectedRole={selectedRole}
+        onRoleChange={setSelectedRole}
+        selectedStatus={selectedStatus}
+        onStatusChange={setSelectedStatus}
+        selectedSpecialization={selectedSpecialization}
+        onSpecializationChange={setSelectedSpecialization}
+      />
+
+      {/* Content Section */}
+      {loading ? (
+        <div className="flex justify-center items-center py-20">
+          <LoadingSpinner size="lg" className="text-[#009688]" />
+        </div>
+      ) : filteredEmployees.length > 0 ? (
+        <EmployeeTable employees={filteredEmployees} />
+      ) : hasActiveFilters ? (
+        <EmptyState
+          title="No matching employees found"
+          description="No employee records match your search query, role, or branch filter."
+          action={
+            <Button variant="outline" size="sm" onClick={resetFilters}>
+              Clear All Filters
+            </Button>
+          }
         />
-
-        {/* Content Section */}
-        {loading ? (
-          <div className="flex justify-center items-center py-20">
-            <LoadingSpinner size="lg" className="text-[#009688]" />
-          </div>
-        ) : filteredEmployees.length > 0 ? (
-          <EmployeeTable employees={filteredEmployees} />
-        ) : hasActiveFilters ? (
-          <EmptyState
-            title="No matching employees found"
-            description="No employee records match your search query and filters."
-            action={
-              <Button variant="outline" size="sm" onClick={resetFilters}>
-                Clear All Filters
+      ) : (
+        <EmptyState
+          title="No employees added yet"
+          description="Get started by adding your first employee to the CRM system."
+          action={
+            <Link href="/employees/new">
+              <Button variant="primary" size="sm">
+                + Add First Employee
               </Button>
-            }
-          />
-        ) : (
-          <EmptyState
-            title="No employees added yet"
-            description="Get started by adding your first employee to the CRM system."
-            action={
-              <Link href="/employees/new">
-                <Button variant="primary" size="sm">
-                  + Add First Employee
-                </Button>
-              </Link>
-            }
-          />
-        )}
+            </Link>
+          }
+        />
+      )}
     </AppShell>
   );
 }

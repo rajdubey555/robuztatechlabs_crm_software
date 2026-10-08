@@ -21,13 +21,14 @@ const ROLE_OPTIONS: { label: string; value: EmployeeRole }[] = [
   { label: "Accountant", value: "accountant" },
 ];
 
-const SPEC_OPTIONS: { label: string; value: EmployeeSpecialization }[] = [
-  { label: "General Repair", value: "general" },
+const SPEC_OPTIONS: { label: string; value: string }[] = [
+  { label: "Drone Specialist (Drones, Gimbal, FC)", value: "drone" },
   { label: "Laptop Specialist", value: "laptop" },
   { label: "Mobile Specialist", value: "mobile" },
   { label: "Apple Devices (MacBook / iPhone)", value: "apple" },
   { label: "Hardware & Chip-level Repair", value: "hardware" },
   { label: "Software & OS Servicing", value: "software" },
+  { label: "General Repair", value: "general" },
 ];
 
 const GENDER_OPTIONS = [

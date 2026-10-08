@@ -1,22 +1,10 @@
 import type { Metadata } from "next";
-import { Inter, Space_Grotesk } from "next/font/google";
 import "./globals.css";
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
-});
-
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  variable: "--font-space-grotesk",
-  display: "swap",
-});
+import { BranchProvider } from "@/context/BranchContext";
 
 export const metadata: Metadata = {
-  title: "Robuzta CRM",
-  description: "Laptop and Mobile Repair Business CRM",
+  title: "Robuzta CRM | Multi-Branch & Drone/Laptop Repair Operations",
+  description: "Robuzta CRM - Multi-Branch (South Bopal & Tragad) Laptop, Mobile & Drone Repair Management Portal",
 };
 
 export default function RootLayout({
@@ -27,10 +15,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${spaceGrotesk.variable} h-full antialiased`}
+      className="h-full antialiased"
     >
-      <body className="min-h-full flex flex-col font-sans bg-slate-50 text-slate-900">
-        {children}
+      <body className="min-h-full flex flex-col font-sans bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+        <BranchProvider>
+          {children}
+        </BranchProvider>
       </body>
     </html>
   );

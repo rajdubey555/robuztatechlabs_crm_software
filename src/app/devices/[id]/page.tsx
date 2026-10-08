@@ -10,6 +10,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Button, Card, CardHeader, CardTitle, CardContent, Badge, Alert, LoadingSpinner, EmptyState, Modal, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui";
 import { JobStatusBadge } from "@/components/jobs/JobStatusBadge";
 import { JobPriorityBadge } from "@/components/jobs/JobPriorityBadge";
+import { BRANCHES, CATEGORIES } from "@/types/branch";
 
 export default function DeviceDetailPage() {
   const params = useParams();
@@ -110,6 +111,16 @@ export default function DeviceDetailPage() {
                   <Badge variant="default" className="text-sm">
                     {device.device_type}
                   </Badge>
+                  {device.branch && (
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${BRANCHES[device.branch]?.badgeColor || ""}`}>
+                      📍 {BRANCHES[device.branch]?.shortName}
+                    </span>
+                  )}
+                  {device.category_type && (
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${CATEGORIES[device.category_type]?.badgeColor || ""}`}>
+                      {CATEGORIES[device.category_type]?.icon} {CATEGORIES[device.category_type]?.name}
+                    </span>
+                  )}
                 </div>
               )}
             </div>

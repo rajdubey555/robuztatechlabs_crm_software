@@ -11,6 +11,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Button, Card, CardHeader, CardTitle, CardContent, Badge, Alert, LoadingSpinner, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui";
 import { JobStatusBadge } from "@/components/jobs/JobStatusBadge";
 import { JobPriorityBadge } from "@/components/jobs/JobPriorityBadge";
+import { BRANCHES } from "@/types/branch";
 
 export default function CustomerDetailPage() {
   const params = useParams();
@@ -113,9 +114,16 @@ export default function CustomerDetailPage() {
                 {customer ? customer.full_name : "Customer Details"}
               </h1>
               {customer && (
-                <Badge variant="primary" className="text-sm px-3 py-1">
-                  {customer.customer_code}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="primary" className="text-sm px-3 py-1">
+                    {customer.customer_code}
+                  </Badge>
+                  {customer.branch && (
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${BRANCHES[customer.branch === "both" ? "south_bopal" : customer.branch]?.badgeColor || ""}`}>
+                      📍 {customer.branch === "both" ? "Both Branches" : BRANCHES[customer.branch]?.shortName}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           </div>

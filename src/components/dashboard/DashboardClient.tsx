@@ -13,6 +13,8 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Button, Card, CardHeader, CardTitle, CardContent, Badge, Alert, LoadingSpinner, EmptyState, Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui";
 import { JobStatusBadge } from "@/components/jobs/JobStatusBadge";
 import { JobPriorityBadge } from "@/components/jobs/JobPriorityBadge";
+import { useBranchContext } from "@/context/BranchContext";
+import { BRANCHES, CATEGORIES } from "@/types/branch";
 
 export interface DashboardClientProps {
   userEmail?: string;
@@ -30,14 +32,15 @@ interface ActivityItem {
 export function DashboardClient({ userEmail }: DashboardClientProps) {
   const router = useRouter();
   const supabase = createClient();
+  const { selectedBranch, selectedCategory, activeBranchInfo, activeCategoryInfo, isFiltered, clearFilters } = useBranchContext();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Data states
   const [jobs, setJobs] = useState<RepairJob[]>([]);
-  const [customersCount, setCustomersCount] = useState<number>(0);
-  const [devicesCount, setDevicesCount] = useState<number>(0);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [recentDiagnoses, setRecentDiagnoses] = useState<Diagnosis[]>([]);
 
@@ -65,17 +68,17 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
         if (jobsErr) throw jobsErr;
         setJobs((jobsData as unknown as RepairJob[]) || []);
 
-        // 2. Fetch Customers Count
-        const { count: custCount } = await supabase
+        // 2. Fetch Customers
+        const { data: custData } = await supabase
           .from("customers")
-          .select("*", { count: "exact", head: true });
-        setCustomersCount(custCount || 0);
+          .select("*");
+        setCustomers((custData as Customer[]) || []);
 
-        // 3. Fetch Devices Count
-        const { count: devCount } = await supabase
+        // 3. Fetch Devices
+        const { data: devData } = await supabase
           .from("devices")
-          .select("*", { count: "exact", head: true });
-        setDevicesCount(devCount || 0);
+          .select("*");
+        setDevices((devData as Device[]) || []);
 
         // 4. Fetch Employees
         const { data: empData } = await supabase
@@ -105,52 +108,79 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
     fetchDashboardData();
   }, [supabase]);
 
-  // Metrics Calculations
+  // Dynamically Filtered Jobs by Branch & Category Context
+  const filteredJobs = useMemo(() => {
+    return jobs.filter((j) => {
+      if (selectedBranch !== "all" && j.branch && j.branch !== selectedBranch) return false;
+      if (selectedCategory !== "all" && j.category_type && j.category_type !== selectedCategory) return false;
+      return true;
+    });
+  }, [jobs, selectedBranch, selectedCategory]);
+
+  // Dynamically Filtered Customers by Branch Context
+  const filteredCustomersCount = useMemo(() => {
+    return customers.filter((c) => {
+      if (selectedBranch !== "all" && c.branch && c.branch !== "both" && c.branch !== selectedBranch) return false;
+      return true;
+    }).length;
+  }, [customers, selectedBranch]);
+
+  // Dynamically Filtered Devices by Branch & Category Context
+  const filteredDevicesCount = useMemo(() => {
+    return devices.filter((d) => {
+      if (selectedBranch !== "all" && d.branch && d.branch !== selectedBranch) return false;
+      if (selectedCategory !== "all" && d.category_type && d.category_type !== selectedCategory) return false;
+      return true;
+    }).length;
+  }, [devices, selectedBranch, selectedCategory]);
+
+  // Dynamically Filtered Employees by Branch Context
+  const filteredEmployeesCount = useMemo(() => {
+    return employees.filter((e) => {
+      if (selectedBranch !== "all" && (e as unknown as { branch?: string }).branch && (e as unknown as { branch?: string }).branch !== "both" && (e as unknown as { branch?: string }).branch !== selectedBranch) return false;
+      return true;
+    }).length;
+  }, [employees, selectedBranch]);
+
+  // Metrics Calculations based on filtered jobs
   const metrics = useMemo(() => {
-    const totalJobs = jobs.length;
-    const pendingJobs = jobs.filter(
+    const totalJobs = filteredJobs.length;
+    const pendingJobs = filteredJobs.filter(
       (j) => !["delivered", "closed", "cancelled", "unrepairable"].includes(j.status)
     ).length;
-    const completedJobs = jobs.filter((j) =>
+    const completedJobs = filteredJobs.filter((j) =>
       ["delivered", "closed", "diagnosed"].includes(j.status)
     ).length;
 
-    const revenue = jobs.reduce((acc, j) => {
+    const revenue = filteredJobs.reduce((acc, j) => {
       const val = Number(j.final_cost || 0);
       return acc + (isNaN(val) ? 0 : val);
     }, 0);
 
-    const pendingPayments = jobs
-      .filter((j) => !["delivered", "closed", "cancelled", "unrepairable"].includes(j.status))
-      .reduce((acc, j) => {
-        const val = Number(j.estimated_cost || 0);
-        return acc + (isNaN(val) ? 0 : val);
-      }, 0);
-
-    return { totalJobs, pendingJobs, completedJobs, revenue, pendingPayments };
-  }, [jobs]);
+    return { totalJobs, pendingJobs, completedJobs, revenue };
+  }, [filteredJobs]);
 
   // Needs Attention Calculations
   const attentionItems = useMemo(() => {
-    const urgentJobs = jobs.filter(
+    const urgentJobs = filteredJobs.filter(
       (j) =>
         ["critical", "high"].includes(j.priority) &&
         !["delivered", "closed", "cancelled", "unrepairable"].includes(j.status)
     );
 
-    const unassignedJobs = jobs.filter(
+    const unassignedJobs = filteredJobs.filter(
       (j) =>
         !j.assigned_employee_id &&
         !["delivered", "closed", "cancelled", "unrepairable"].includes(j.status)
     );
 
-    const pendingDiagnosisJobs = jobs.filter(
+    const pendingDiagnosisJobs = filteredJobs.filter(
       (j) =>
         ["received", "diagnosis_pending"].includes(j.status) &&
         !["cancelled", "unrepairable"].includes(j.status)
     );
 
-    const readyForDeliveryJobs = jobs.filter(
+    const readyForDeliveryJobs = filteredJobs.filter(
       (j) => j.status === "diagnosed"
     );
 
@@ -160,34 +190,34 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
       pendingDiagnosisCount: pendingDiagnosisJobs.length,
       readyDeliveryCount: readyForDeliveryJobs.length,
     };
-  }, [jobs]);
+  }, [filteredJobs]);
 
   // Workflow Pipeline Counts
   const pipelineCounts = useMemo(() => {
     return {
-      received: jobs.filter((j) => j.status === "received").length,
-      diagnosis: jobs.filter((j) => j.status === "diagnosis_pending").length,
-      diagnosed: jobs.filter((j) => j.status === "diagnosed").length,
-      cancelled: jobs.filter((j) => j.status === "cancelled").length,
-      unrepairable: jobs.filter((j) => j.status === "unrepairable").length,
+      received: filteredJobs.filter((j) => j.status === "received").length,
+      diagnosis: filteredJobs.filter((j) => j.status === "diagnosis_pending").length,
+      diagnosed: filteredJobs.filter((j) => j.status === "diagnosed").length,
+      cancelled: filteredJobs.filter((j) => j.status === "cancelled").length,
+      unrepairable: filteredJobs.filter((j) => j.status === "unrepairable").length,
     };
-  }, [jobs]);
+  }, [filteredJobs]);
 
-  // Filtered recent jobs for the dashboard table
+  // Filtered recent jobs for table view
   const filteredRecentJobs = useMemo(() => {
-    let result = jobs;
+    let result = filteredJobs;
     if (selectedPipelineStage) {
       result = result.filter((j) => j.status === selectedPipelineStage);
     }
     return result.slice(0, 8);
-  }, [jobs, selectedPipelineStage]);
+  }, [filteredJobs, selectedPipelineStage]);
 
   // Recent Activity Stream Generation
   const recentActivities = useMemo<ActivityItem[]>(() => {
     const items: ActivityItem[] = [];
 
     // Add recent jobs
-    jobs.slice(0, 4).forEach((j) => {
+    filteredJobs.slice(0, 4).forEach((j) => {
       items.push({
         id: `job-${j.id}`,
         type: "job",
@@ -210,11 +240,10 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
       });
     });
 
-    // Sort by timestamp descending
     return items
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, 6);
-  }, [jobs, recentDiagnoses]);
+  }, [filteredJobs, recentDiagnoses]);
 
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return "—";
@@ -239,19 +268,42 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
       {/* 1. TOP GREETING & OPERATIONAL HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
         <div className="space-y-1">
-          <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-            <span>⚡</span> Robuzta Repair Operations Dashboard
-          </h1>
-          <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 flex-wrap pt-0.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+              <span>⚡</span> Robuzta Repair Operations Dashboard
+            </h1>
+            {activeBranchInfo && (
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${activeBranchInfo.badgeColor}`}>
+                📍 {activeBranchInfo.shortName}
+              </span>
+            )}
+            {activeCategoryInfo && (
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${activeCategoryInfo.badgeColor}`}>
+                {activeCategoryInfo.icon} {activeCategoryInfo.name}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {activeBranchInfo ? activeBranchInfo.address : "Viewing all lab branches combined analytics"}
+          </p>
+          <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 flex-wrap pt-1">
             <span className="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md font-semibold text-slate-700 dark:text-slate-300">
-              👥 {customersCount} Customers
+              👥 {filteredCustomersCount} Customers
             </span>
             <span className="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md font-semibold text-slate-700 dark:text-slate-300">
-              💻 {devicesCount} Registered Devices
+              💻 {filteredDevicesCount} Devices
             </span>
             <span className="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md font-semibold text-slate-700 dark:text-slate-300">
-              👨‍🔧 {employees.length} Staff Members
+              👨‍🔧 {filteredEmployeesCount} Technicians
             </span>
+            {isFiltered && (
+              <button
+                onClick={clearFilters}
+                className="text-xs font-bold text-amber-600 underline hover:text-amber-700"
+              >
+                Clear Filters
+              </button>
+            )}
           </div>
         </div>
 
@@ -304,6 +356,50 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
         </div>
       </div>
 
+      {/* BRANCH COMPARISON CARD IF ALL BRANCHES SELECTED */}
+      {selectedBranch === "all" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {Object.values(BRANCHES).map((branch) => {
+            const branchJobs = jobs.filter((j) => j.branch === branch.id);
+            const activeCount = branchJobs.filter(
+              (j) => !["delivered", "closed", "cancelled", "unrepairable"].includes(j.status)
+            ).length;
+            const rev = branchJobs.reduce((acc, j) => acc + (Number(j.final_cost) || 0), 0);
+
+            return (
+              <div
+                key={branch.id}
+                className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">📍</span>
+                    <span className="font-extrabold text-slate-900 dark:text-white text-base">
+                      {branch.name}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500">{branch.subtitle}</p>
+                  <div className="flex items-center gap-3 pt-1 text-xs">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">
+                      Total Jobs: {branchJobs.length}
+                    </span>
+                    <span className="font-semibold text-amber-600">
+                      Active: {activeCount}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Revenue</span>
+                  <span className="text-lg font-black text-[#009688]">
+                    {formatCurrency(rev)}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {error && (
         <Alert variant="error" onClose={() => setError(null)}>
           {error}
@@ -316,7 +412,7 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
         </div>
       ) : (
         <>
-          {/* 2. CORE BUSINESS METRIC CARDS (SQUARE PROPORTIONED) */}
+          {/* 2. CORE BUSINESS METRIC CARDS */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className="shadow-xs border-l-4 border-l-slate-700 hover:shadow-md transition-all">
               <CardContent className="px-5 py-5 pt-6 min-h-[145px] flex flex-col justify-between space-y-2">
@@ -332,7 +428,7 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
                   <div className="text-3xl font-extrabold text-slate-900 dark:text-white leading-tight">
                     {metrics.totalJobs}
                   </div>
-                  <span className="text-xs text-slate-500 mt-1 block">All-time tickets recorded</span>
+                  <span className="text-xs text-slate-500 mt-1 block">Filtered tickets recorded</span>
                 </div>
               </CardContent>
             </Card>
@@ -379,7 +475,7 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
               <CardContent className="px-5 py-5 pt-6 min-h-[145px] flex flex-col justify-between space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[#009688]">
-                    Closed Business Revenue
+                    Billed Revenue
                   </span>
                   <div className="w-8 h-8 rounded-lg bg-[#e0f2f1] dark:bg-[#004d40]/40 text-[#009688] flex items-center justify-center text-sm">
                     💰
@@ -395,7 +491,7 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
             </Card>
           </div>
 
-          {/* 3. OPERATIONAL ACTION FOCUS (PROPERLY ALIGNED CARDS) */}
+          {/* 3. OPERATIONAL ACTION FOCUS */}
           <div className="space-y-3 pt-2">
             <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <span>⚠️</span> Operational Action Focus
@@ -597,60 +693,62 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Job ID</TableHead>
+                      <TableHead>Branch & Category</TableHead>
                       <TableHead>Customer</TableHead>
                       <TableHead>Device</TableHead>
-                      <TableHead>Technician</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Priority</TableHead>
                       <TableHead className="text-right">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredRecentJobs.map((job) => (
-                      <TableRow
-                        key={job.id}
-                        className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900"
-                        onClick={() => router.push(`/jobs/${job.id}`)}
-                      >
-                        <TableCell className="font-mono text-xs font-semibold">
-                          <Badge variant="primary">{job.job_code}</Badge>
-                        </TableCell>
-                        <TableCell className="font-medium text-slate-900 dark:text-white">
-                          {job.customer?.full_name || "—"}
-                        </TableCell>
-                        <TableCell className="text-xs text-slate-600 dark:text-slate-300">
-                          {job.device ? `${job.device.brand} ${job.device.model}` : "—"}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {job.assigned_employee ? (
-                            <span className="font-semibold text-slate-800 dark:text-slate-200">
-                              {job.assigned_employee.full_name}
-                            </span>
-                          ) : (
-                            <span className="text-amber-600 font-semibold">Unassigned</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <JobStatusBadge status={job.status} />
-                        </TableCell>
-                        <TableCell>
-                          <JobPriorityBadge priority={job.priority} />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Link href={`/jobs/${job.id}`} onClick={(e) => e.stopPropagation()}>
-                            <Button variant="outline" size="sm">
-                              View
-                            </Button>
-                          </Link>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {filteredRecentJobs.map((job) => {
+                      const branchInfo = job.branch ? BRANCHES[job.branch] : BRANCHES["south_bopal"];
+                      const catInfo = job.category_type ? CATEGORIES[job.category_type] : CATEGORIES["laptop_general"];
+
+                      return (
+                        <TableRow
+                          key={job.id}
+                          className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900"
+                          onClick={() => router.push(`/jobs/${job.id}`)}
+                        >
+                          <TableCell className="font-mono text-xs font-semibold">
+                            <Badge variant="primary">{job.job_code}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border w-max ${branchInfo.badgeColor}`}>
+                                📍 {branchInfo.shortName}
+                              </span>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border w-max ${catInfo.badgeColor}`}>
+                                {catInfo.icon} {catInfo.shortName}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-medium text-slate-900 dark:text-white">
+                            {job.customer?.full_name || "—"}
+                          </TableCell>
+                          <TableCell className="text-xs text-slate-600 dark:text-slate-300">
+                            {job.device ? `${job.device.brand} ${job.device.model}` : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <JobStatusBadge status={job.status} />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Link href={`/jobs/${job.id}`} onClick={(e) => e.stopPropagation()}>
+                              <Button variant="outline" size="sm">
+                                View
+                              </Button>
+                            </Link>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               ) : (
                 <EmptyState
                   title="No repair jobs found"
-                  description="No repair jobs match your selected stage filter."
+                  description="No repair jobs match your current branch or category selection."
                 />
               )}
             </div>
