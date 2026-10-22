@@ -3,6 +3,7 @@ import { Customer } from "@/types/customer";
 import { Device } from "@/types/device";
 import { Employee } from "@/types/employee";
 import { Diagnosis } from "@/types/diagnosis";
+import { PartRequest } from "@/types/partRequest";
 
 export interface ActivityItem {
   id: string;
@@ -41,4 +42,6 @@ export interface DashboardData {
   devices: Device[];
   employees: Employee[];
   recentDiagnoses: Diagnosis[];
+  partRequests: PartRequest[];
 }
+

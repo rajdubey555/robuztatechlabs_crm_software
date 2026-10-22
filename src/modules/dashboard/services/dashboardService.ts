@@ -12,7 +12,7 @@ import { DashboardData } from "../types";
 export async function getDashboardData(): Promise<{ data: DashboardData; error: string | null }> {
   const supabase = createClient();
   try {
-    const [jobsRes, custRes, devRes, empRes, diagRes] = await Promise.all([
+    const [jobsRes, custRes, devRes, empRes, diagRes, partsRes] = await Promise.all([
       // 1. Repair jobs with customer, device & technician
       supabase
         .from("repair_jobs")
@@ -42,6 +42,12 @@ export async function getDashboardData(): Promise<{ data: DashboardData; error: 
         `)
         .order("created_at", { ascending: false })
         .limit(5),
+
+      // 6. Part Requests
+      supabase
+        .from("part_requests")
+        .select("*")
+        .order("created_at", { ascending: false }),
     ]);
 
     if (jobsRes.error) throw jobsRes.error;
@@ -53,6 +59,7 @@ export async function getDashboardData(): Promise<{ data: DashboardData; error: 
         devices: (devRes.data as Device[]) || [],
         employees: (empRes.data as Employee[]) || [],
         recentDiagnoses: (diagRes.data as unknown as Diagnosis[]) || [],
+        partRequests: (partsRes.data as unknown as any[]) || [],
       },
       error: null,
     };
@@ -65,6 +72,7 @@ export async function getDashboardData(): Promise<{ data: DashboardData; error: 
         devices: [],
         employees: [],
         recentDiagnoses: [],
+        partRequests: [],
       },
       error: msg,
     };
