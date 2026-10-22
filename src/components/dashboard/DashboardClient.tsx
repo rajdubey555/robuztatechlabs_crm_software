@@ -9,18 +9,13 @@ import { Device } from "@/types/device";
 import { Employee } from "@/types/employee";
 import { Diagnosis } from "@/types/diagnosis";
 import { AppShell } from "@/components/layout/AppShell";
-import { Button, Card, CardHeader, CardTitle, CardContent, Badge, Alert, LoadingSpinner, EmptyState, Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui";
+import { Button, Card, CardHeader, CardTitle, CardContent, Badge, Alert, LoadingSpinner, EmptyState } from "@/components/ui";
 import { JobStatusBadge } from "@/components/jobs/JobStatusBadge";
 import { JobPriorityBadge } from "@/components/jobs/JobPriorityBadge";
 import { useBranchContext } from "@/context/BranchContext";
 import { BRANCHES, CATEGORIES } from "@/types/branch";
-import {
-  getDashboardData,
-  calculateDashboardMetrics,
-  calculateAttentionMetrics,
-  calculatePipelineCounts,
-  ActivityItem,
-} from "@/modules/dashboard";
+import { getDashboardData, ActivityItem } from "@/modules/dashboard";
+import { buildWhatsAppClickUrl } from "@/modules/procurement";
 
 export interface DashboardClientProps {
   userEmail?: string;
@@ -28,7 +23,14 @@ export interface DashboardClientProps {
 
 export function DashboardClient({ userEmail }: DashboardClientProps) {
   const router = useRouter();
-  const { selectedBranch, selectedCategory, activeBranchInfo, activeCategoryInfo, isFiltered, clearFilters } = useBranchContext();
+  const {
+    selectedBranch,
+    selectedCategory,
+    activeBranchInfo,
+    activeCategoryInfo,
+    isFiltered,
+    clearFilters,
+  } = useBranchContext();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,8 +42,10 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [recentDiagnoses, setRecentDiagnoses] = useState<Diagnosis[]>([]);
 
-  // Search & Filter states
-  const [selectedPipelineStage, setSelectedPipelineStage] = useState<string>("");
+  // Interactive filters inside the dashboard
+  const [activeQueueTab, setActiveQueueTab] = useState<"all" | "attention" | "ready">("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedStage, setSelectedStage] = useState<string>("ALL");
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
 
   useEffect(() => {
@@ -69,7 +73,15 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
     fetchDashboardData();
   }, []);
 
-  // Dynamically Filtered Jobs by Branch & Category Context
+  // Time-aware greeting
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good Morning";
+    if (hour < 17) return "Good Afternoon";
+    return "Good Evening";
+  }, []);
+
+  // Filtered jobs by branch & category context
   const filteredJobs = useMemo(() => {
     return jobs.filter((j) => {
       if (selectedBranch !== "all" && j.branch && j.branch !== selectedBranch) return false;
@@ -78,74 +90,129 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
     });
   }, [jobs, selectedBranch, selectedCategory]);
 
-  // Dynamically Filtered Customers by Branch Context
-  const filteredCustomersCount = useMemo(() => {
-    return customers.filter((c) => {
-      if (selectedBranch !== "all" && c.branch && c.branch !== "both" && c.branch !== selectedBranch) return false;
-      return true;
-    }).length;
-  }, [customers, selectedBranch]);
+  // THE BIG 4 NORTH-STAR METRICS
+  const kpis = useMemo(() => {
+    // 1. Active jobs currently under repair or inspection
+    const activeJobs = filteredJobs.filter(
+      (j) => !["delivered", "closed", "cancelled", "unrepairable"].includes(j.status)
+    );
 
-  // Dynamically Filtered Devices by Branch & Category Context
-  const filteredDevicesCount = useMemo(() => {
-    return devices.filter((d) => {
-      if (selectedBranch !== "all" && d.branch && d.branch !== selectedBranch) return false;
-      if (selectedCategory !== "all" && d.category_type && d.category_type !== selectedCategory) return false;
-      return true;
-    }).length;
-  }, [devices, selectedBranch, selectedCategory]);
+    // 2. Needs Attention: High priority OR Not yet assigned to any technician
+    const attentionJobs = activeJobs.filter(
+      (j) => !j.assigned_employee_id || ["critical", "high"].includes(j.priority)
+    );
 
-  // Dynamically Filtered Employees by Branch Context
-  const filteredEmployeesCount = useMemo(() => {
-    return employees.filter((e) => {
-      if (selectedBranch !== "all" && e.branch && e.branch !== "both" && e.branch !== selectedBranch) return false;
-      return true;
-    }).length;
-  }, [employees, selectedBranch]);
+    // 3. Ready for Customer Pickup / Diagnosed
+    const readyJobs = filteredJobs.filter(
+      (j) => j.status === "diagnosed" || ["delivered", "closed"].includes(j.status)
+    );
+    const pendingPickupCount = filteredJobs.filter((j) => j.status === "diagnosed").length;
 
-  // Metrics Calculations based on filtered jobs
-  const metrics = useMemo(() => calculateDashboardMetrics(filteredJobs), [filteredJobs]);
+    // 4. Revenue
+    const totalRevenue = filteredJobs.reduce((acc, j) => {
+      const val = Number(j.final_cost || 0);
+      return acc + (isNaN(val) ? 0 : val);
+    }, 0);
 
-  // Needs Attention Calculations
-  const attentionItems = useMemo(() => calculateAttentionMetrics(filteredJobs), [filteredJobs]);
+    return {
+      activeCount: activeJobs.length,
+      attentionCount: attentionJobs.length,
+      pendingPickupCount,
+      totalRevenue,
+    };
+  }, [filteredJobs]);
 
-  // Workflow Pipeline Counts
-  const pipelineCounts = useMemo(() => calculatePipelineCounts(filteredJobs), [filteredJobs]);
+  // Workflow Pipeline Stage Counts
+  const pipeline = useMemo(() => {
+    return {
+      received: filteredJobs.filter((j) => j.status === "received").length,
+      diagnosis_pending: filteredJobs.filter((j) => j.status === "diagnosis_pending").length,
+      diagnosed: filteredJobs.filter((j) => j.status === "diagnosed").length,
+      unrepairable: filteredJobs.filter((j) => j.status === "unrepairable").length,
+      cancelled: filteredJobs.filter((j) => j.status === "cancelled").length,
+    };
+  }, [filteredJobs]);
 
+  // Technician Workbench Workload calculation
+  const technicianStats = useMemo(() => {
+    const techs = employees.filter(
+      (e) => e.is_active && ["technician", "admin", "manager"].includes(e.role)
+    );
 
+    // Calculate active workload per technician from filtered jobs
+    const workloadMap: Record<string, number> = {};
+    filteredJobs.forEach((j) => {
+      if (
+        j.assigned_employee_id &&
+        !["delivered", "closed", "cancelled", "unrepairable"].includes(j.status)
+      ) {
+        workloadMap[j.assigned_employee_id] = (workloadMap[j.assigned_employee_id] || 0) + 1;
+      }
+    });
 
-  // Filtered recent jobs for table view
-  const filteredRecentJobs = useMemo(() => {
-    let result = filteredJobs;
-    if (selectedPipelineStage) {
-      result = result.filter((j) => j.status === selectedPipelineStage);
+    return techs.map((t) => ({
+      ...t,
+      activeJobs: workloadMap[t.id] || 0,
+    })).sort((a, b) => b.activeJobs - a.activeJobs);
+  }, [employees, filteredJobs]);
+
+  // Active Queue filtered by Tab + Search + Stage
+  const activeQueue = useMemo(() => {
+    let result = filteredJobs.filter(
+      (j) => !["delivered", "closed", "cancelled"].includes(j.status)
+    );
+
+    // Filter by Tab
+    if (activeQueueTab === "attention") {
+      result = result.filter(
+        (j) => !j.assigned_employee_id || ["critical", "high"].includes(j.priority)
+      );
+    } else if (activeQueueTab === "ready") {
+      result = result.filter((j) => j.status === "diagnosed");
     }
-    return result.slice(0, 8);
-  }, [filteredJobs, selectedPipelineStage]);
 
-  // Recent Activity Stream Generation
+    // Filter by Pipeline Stage
+    if (selectedStage !== "ALL") {
+      result = result.filter((j) => j.status === selectedStage);
+    }
+
+    // Filter by Search Query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter((j) => {
+        const code = j.job_code?.toLowerCase() || "";
+        const custName = j.customer?.full_name?.toLowerCase() || "";
+        const custPhone = j.customer?.phone || "";
+        const device = `${j.device?.brand || ""} ${j.device?.model || ""}`.toLowerCase();
+        const complaint = j.customer_complaint?.toLowerCase() || "";
+        return code.includes(q) || custName.includes(q) || custPhone.includes(q) || device.includes(q) || complaint.includes(q);
+      });
+    }
+
+    return result.slice(0, 10);
+  }, [filteredJobs, activeQueueTab, selectedStage, searchQuery]);
+
+  // Recent Live Activity Stream
   const recentActivities = useMemo<ActivityItem[]>(() => {
     const items: ActivityItem[] = [];
 
-    // Add recent jobs
     filteredJobs.slice(0, 4).forEach((j) => {
       items.push({
         id: `job-${j.id}`,
         type: "job",
-        title: `Job Card Created: ${j.job_code}`,
-        description: `Customer: ${j.customer?.full_name || "Client"} • Issue: ${j.customer_complaint.slice(0, 45)}...`,
+        title: `Job Card: ${j.job_code}`,
+        description: `${j.customer?.full_name || "Customer"} • ${j.device?.brand || ""} ${j.device?.model || "Device"}`,
         timestamp: j.created_at,
         link: `/jobs/${j.id}`,
       });
     });
 
-    // Add recent diagnoses
     recentDiagnoses.slice(0, 3).forEach((d) => {
       items.push({
         id: `diag-${d.id}`,
         type: "diagnosis",
-        title: `Diagnosis Recorded`,
-        description: `${d.employee?.full_name || "Technician"}: ${d.diagnosis.slice(0, 45)}... (Est: ₹${d.estimated_cost || 0})`,
+        title: `Diagnosis Done`,
+        description: `${d.employee?.full_name || "Tech"}: ${d.diagnosis.slice(0, 40)}...`,
         timestamp: d.created_at,
         link: `/jobs/${d.repair_job_id}`,
       });
@@ -153,556 +220,568 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
 
     return items
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      .slice(0, 6);
+      .slice(0, 5);
   }, [filteredJobs, recentDiagnoses]);
 
-  const formatDate = (dateStr?: string | null) => {
-    if (!dateStr) return "—";
-    try {
-      return new Date(dateStr).toLocaleDateString("en-IN", {
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch {
-      return dateStr;
-    }
+  const formatCurrency = (amount: number) => {
+    return `₹${amount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
   };
 
-  const formatCurrency = (amount: number) => {
-    return `₹${amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+  const getTimeAgo = (dateStr?: string | null) => {
+    if (!dateStr) return "";
+    try {
+      const diffMs = Date.now() - new Date(dateStr).getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      if (diffMins < 60) return `${diffMins}m ago`;
+      const diffHours = Math.floor(diffMins / 60);
+      if (diffHours < 24) return `${diffHours}h ago`;
+      const diffDays = Math.floor(diffHours / 24);
+      return `${diffDays}d ago`;
+    } catch {
+      return "";
+    }
   };
 
   return (
     <AppShell userEmail={userEmail}>
-      {/* 1. TOP GREETING & OPERATIONAL HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-              <span>⚡</span> Robuzta Repair Operations Dashboard
-            </h1>
-            {activeBranchInfo && (
-              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${activeBranchInfo.badgeColor}`}>
-                📍 {activeBranchInfo.shortName}
-              </span>
-            )}
-            {activeCategoryInfo && (
-              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${activeCategoryInfo.badgeColor}`}>
-                {activeCategoryInfo.icon} {activeCategoryInfo.name}
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            {activeBranchInfo ? activeBranchInfo.address : "Viewing all lab branches combined analytics"}
-          </p>
-          <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 flex-wrap pt-1">
-            <span className="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md font-semibold text-slate-700 dark:text-slate-300">
-              👥 {filteredCustomersCount} Customers
-            </span>
-            <span className="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md font-semibold text-slate-700 dark:text-slate-300">
-              💻 {filteredDevicesCount} Devices
-            </span>
-            <span className="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md font-semibold text-slate-700 dark:text-slate-300">
-              👨‍🔧 {filteredEmployeesCount} Technicians
-            </span>
-            {isFiltered && (
-              <button
-                onClick={clearFilters}
-                className="text-xs font-bold text-amber-600 underline hover:text-amber-700"
-              >
-                Clear Filters
-              </button>
-            )}
-          </div>
-        </div>
+      <div className="space-y-6 max-w-7xl mx-auto pb-10">
 
-        {/* Quick Actions Dropdown */}
-        <div className="relative">
-          <Button
-            variant="primary"
-            size="md"
-            onClick={() => setQuickCreateOpen(!quickCreateOpen)}
-            className="flex items-center gap-2"
-          >
-            <span>+ Quick Create</span>
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </Button>
-
-          {quickCreateOpen && (
-            <div className="absolute right-0 mt-2 w-52 rounded-xl bg-white p-2 shadow-xl border border-slate-200 dark:border-slate-800 dark:bg-slate-900 z-50 space-y-1">
-              <Link
-                href="/jobs/new"
-                onClick={() => setQuickCreateOpen(false)}
-                className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-[#e0f2f1] hover:text-[#004d40] rounded-lg transition-colors"
-              >
-                <span>📋</span> + New Repair Job
-              </Link>
-              <Link
-                href="/customers/new"
-                onClick={() => setQuickCreateOpen(false)}
-                className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-[#e0f2f1] hover:text-[#004d40] rounded-lg transition-colors"
-              >
-                <span>👤</span> + New Customer
-              </Link>
-              <Link
-                href="/devices/new"
-                onClick={() => setQuickCreateOpen(false)}
-                className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-[#e0f2f1] hover:text-[#004d40] rounded-lg transition-colors"
-              >
-                <span>💻</span> + New Device
-              </Link>
-              <Link
-                href="/employees/new"
-                onClick={() => setQuickCreateOpen(false)}
-                className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-[#e0f2f1] hover:text-[#004d40] rounded-lg transition-colors"
-              >
-                <span>👨‍🔧</span> + New Employee
-              </Link>
+        {/* 1. CLEAN EXECUTIVE HERO HEADER */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-6 rounded-2xl shadow-lg border border-slate-700/60">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xl">👋</span>
+              <h1 className="text-2xl font-black tracking-tight text-white font-heading">
+                {greeting}, Team
+              </h1>
+              {activeBranchInfo ? (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#009688]/20 text-teal-300 border border-[#009688]/40 flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
+                  📍 {activeBranchInfo.shortName} Lab
+                </span>
+              ) : (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-700 text-slate-300 border border-slate-600">
+                  🌐 All Branches Overview
+                </span>
+              )}
+              {activeCategoryInfo && (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-cyan-950/60 text-cyan-300 border border-cyan-800 flex items-center gap-1">
+                  {activeCategoryInfo.icon} {activeCategoryInfo.name}
+                </span>
+              )}
             </div>
-          )}
+            <p className="text-xs text-slate-300 mt-1">
+              Live service center overview • Everything happening on your repair floor right now.
+            </p>
+          </div>
+
+          {/* Primary Quick Create + Menu */}
+          <div className="flex items-center gap-2 relative">
+            <Link href="/jobs/new">
+              <button className="px-5 py-2.5 bg-gradient-to-r from-[#009688] to-[#00796b] hover:from-[#00897b] hover:to-[#00695c] text-white font-bold text-sm rounded-xl shadow-md shadow-[#009688]/30 flex items-center gap-2 transition-all active:scale-95">
+                <span className="text-lg leading-none">+</span>
+                <span>New Job Card</span>
+              </button>
+            </Link>
+
+            <button
+              onClick={() => setQuickCreateOpen(!quickCreateOpen)}
+              className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 transition-colors"
+              title="More Actions"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {quickCreateOpen && (
+              <div className="absolute right-0 top-12 w-48 rounded-xl bg-white dark:bg-slate-900 p-1.5 shadow-2xl border border-slate-200 dark:border-slate-800 z-50 space-y-1 text-slate-800 dark:text-slate-200 text-xs">
+                <Link
+                  href="/customers/new"
+                  onClick={() => setQuickCreateOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold"
+                >
+                  <span>👤</span> New Customer
+                </Link>
+                <Link
+                  href="/devices/new"
+                  onClick={() => setQuickCreateOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold"
+                >
+                  <span>💻</span> New Device
+                </Link>
+                <Link
+                  href="/part-requests"
+                  onClick={() => setQuickCreateOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold"
+                >
+                  <span>📦</span> Order Spare Part
+                </Link>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* BRANCH COMPARISON CARD IF ALL BRANCHES SELECTED */}
-      {selectedBranch === "all" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Object.values(BRANCHES).map((branch) => {
-            const branchJobs = jobs.filter((j) => j.branch === branch.id);
-            const activeCount = branchJobs.filter(
-              (j) => !["delivered", "closed", "cancelled", "unrepairable"].includes(j.status)
-            ).length;
-            const rev = branchJobs.reduce((acc, j) => acc + (Number(j.final_cost) || 0), 0);
+        {error && (
+          <Alert variant="error" onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
 
-            return (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-24 space-y-3">
+            <LoadingSpinner size="lg" className="text-[#009688]" />
+            <p className="text-xs text-slate-400 font-medium">Loading live service center metrics...</p>
+          </div>
+        ) : (
+          <>
+            {/* 2. THE BIG 4 "NORTH-STAR" CARDS (SUPER EASY TO READ) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              
+              {/* Card 1: Active Jobs */}
               <div
-                key={branch.id}
-                className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between"
+                onClick={() => { setActiveQueueTab("all"); setSelectedStage("ALL"); }}
+                className="cursor-pointer bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-xs hover:border-[#009688]/60 hover:shadow-md transition-all group"
               >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">📍</span>
-                    <span className="font-extrabold text-slate-900 dark:text-white text-base">
-                      {branch.name}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500">{branch.subtitle}</p>
-                  <div className="flex items-center gap-3 pt-1 text-xs">
-                    <span className="font-semibold text-slate-700 dark:text-slate-300">
-                      Total Jobs: {branchJobs.length}
-                    </span>
-                    <span className="font-semibold text-amber-600">
-                      Active: {activeCount}
-                    </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    Active Repairs
+                  </span>
+                  <div className="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-950/40 text-[#009688] flex items-center justify-center text-lg shadow-inner group-hover:scale-110 transition-transform">
+                    ⚡
                   </div>
                 </div>
-                <div className="text-right">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Revenue</span>
-                  <span className="text-lg font-black text-[#009688]">
-                    {formatCurrency(rev)}
-                  </span>
+                <div className="mt-3">
+                  <div className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+                    {kpis.activeCount}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1 flex items-center gap-1 font-medium">
+                    <span className="text-[#009688] font-bold">●</span> In repair or diagnosis now
+                  </p>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      )}
 
-      {error && (
-        <Alert variant="error" onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {loading ? (
-        <div className="flex justify-center items-center py-24">
-          <LoadingSpinner size="lg" className="text-[#009688]" />
-        </div>
-      ) : (
-        <>
-          {/* 2. CORE BUSINESS METRIC CARDS */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="shadow-xs border-l-4 border-l-slate-700 hover:shadow-md transition-all">
-              <CardContent className="px-5 py-5 pt-6 min-h-[145px] flex flex-col justify-between space-y-2">
+              {/* Card 2: Needs Attention (Urgent or Unassigned) */}
+              <div
+                onClick={() => { setActiveQueueTab("attention"); setSelectedStage("ALL"); }}
+                className={`cursor-pointer bg-white dark:bg-slate-900 rounded-2xl p-5 border shadow-xs transition-all group ${
+                  kpis.attentionCount > 0
+                    ? "border-amber-300 dark:border-amber-800 hover:border-amber-500"
+                    : "border-slate-200 dark:border-slate-800"
+                }`}
+              >
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                    Total Repair Tickets
+                  <span className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+                    Needs Attention
                   </span>
-                  <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-sm">
-                    📋
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-500 flex items-center justify-center text-lg shadow-inner group-hover:scale-110 transition-transform">
+                    ⚠️
                   </div>
                 </div>
-                <div>
-                  <div className="text-3xl font-extrabold text-slate-900 dark:text-white leading-tight">
-                    {metrics.totalJobs}
+                <div className="mt-3">
+                  <div className="text-3xl font-black text-amber-600 dark:text-amber-400 tracking-tight">
+                    {kpis.attentionCount}
                   </div>
-                  <span className="text-xs text-slate-500 mt-1 block">Filtered tickets recorded</span>
+                  <p className="text-xs text-slate-500 mt-1 font-medium">
+                    {kpis.attentionCount === 0 ? "Everything assigned & smooth" : "Unassigned or High priority"}
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
 
-            <Card className="shadow-xs border-l-4 border-l-amber-500 hover:shadow-md transition-all">
-              <CardContent className="px-5 py-5 pt-6 min-h-[145px] flex flex-col justify-between space-y-2">
+              {/* Card 3: Ready for Pickup */}
+              <div
+                onClick={() => { setActiveQueueTab("ready"); setSelectedStage("ALL"); }}
+                className="cursor-pointer bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-xs hover:border-emerald-500/60 hover:shadow-md transition-all group"
+              >
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                    Active In-Progress
+                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                    Ready For Pickup
                   </span>
-                  <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center text-sm">
-                    ⚙️
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center text-lg shadow-inner group-hover:scale-110 transition-transform">
+                    📦
                   </div>
                 </div>
-                <div>
-                  <div className="text-3xl font-extrabold text-amber-600 dark:text-amber-400 leading-tight">
-                    {metrics.pendingJobs}
+                <div className="mt-3">
+                  <div className="text-3xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">
+                    {kpis.pendingPickupCount}
                   </div>
-                  <span className="text-xs text-slate-500 mt-1 block">Active repairs undergoing service</span>
+                  <p className="text-xs text-slate-500 mt-1 font-medium">
+                    Repairs finished • Handover pending
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
 
-            <Card className="shadow-xs border-l-4 border-l-emerald-500 hover:shadow-md transition-all">
-              <CardContent className="px-5 py-5 pt-6 min-h-[145px] flex flex-col justify-between space-y-2">
+              {/* Card 4: Total Revenue */}
+              <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                    Completed & Delivered
-                  </span>
-                  <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-sm">
-                    ✅
-                  </div>
-                </div>
-                <div>
-                  <div className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 leading-tight">
-                    {metrics.completedJobs}
-                  </div>
-                  <span className="text-xs text-slate-500 mt-1 block">Repairs completed & handed over</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="shadow-xs border-l-4 border-l-[#009688] hover:shadow-md transition-all">
-              <CardContent className="px-5 py-5 pt-6 min-h-[145px] flex flex-col justify-between space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#009688]">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                     Billed Revenue
                   </span>
-                  <div className="w-8 h-8 rounded-lg bg-[#e0f2f1] dark:bg-[#004d40]/40 text-[#009688] flex items-center justify-center text-sm">
+                  <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 flex items-center justify-center text-lg shadow-inner">
                     💰
                   </div>
                 </div>
-                <div>
-                  <div className="text-3xl font-extrabold text-[#009688] leading-tight">
-                    {formatCurrency(metrics.revenue)}
+                <div className="mt-3">
+                  <div className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+                    {formatCurrency(kpis.totalRevenue)}
                   </div>
-                  <span className="text-xs text-slate-500 mt-1 block">Billed completed revenue</span>
+                  <p className="text-xs text-slate-500 mt-1 font-medium">
+                    Total revenue across tickets
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
 
-          {/* 3. OPERATIONAL ACTION FOCUS */}
-          <div className="space-y-3 pt-2">
-            <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <span>⚠️</span> Operational Action Focus
-            </h2>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card className="shadow-xs border-l-4 border-l-rose-500 hover:shadow-md transition-all">
-                <CardContent className="px-5 py-5 pt-6 min-h-[135px] flex flex-col justify-between space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">
-                      Urgent / High Priority
-                    </span>
-                    <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
-                  </div>
-                  <div className="flex items-end justify-between gap-2">
-                    <span className="text-3xl font-black text-slate-900 dark:text-white leading-none">
-                      {attentionItems.urgentCount}
-                    </span>
-                    <Link href="/jobs" className="shrink-0">
-                      <Button variant="outline" size="sm" className="px-3 py-1.5 text-xs font-semibold rounded-lg hover:bg-rose-50 hover:text-rose-600 hover:border-rose-300 transition-colors">
-                        View →
-                      </Button>
-                    </Link>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-xs border-l-4 border-l-amber-500 hover:shadow-md transition-all">
-                <CardContent className="px-5 py-5 pt-6 min-h-[135px] flex flex-col justify-between space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
-                      Unassigned Tech Jobs
-                    </span>
-                    <span className="h-2 w-2 rounded-full bg-amber-500" />
-                  </div>
-                  <div className="flex items-end justify-between gap-2">
-                    <span className="text-3xl font-black text-slate-900 dark:text-white leading-none">
-                      {attentionItems.unassignedCount}
-                    </span>
-                    <Link href="/jobs" className="shrink-0">
-                      <Button variant="outline" size="sm" className="px-3 py-1.5 text-xs font-semibold rounded-lg hover:bg-amber-50 hover:text-amber-600 hover:border-amber-300 transition-colors">
-                        Assign →
-                      </Button>
-                    </Link>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-xs border-l-4 border-l-sky-500 hover:shadow-md transition-all">
-                <CardContent className="px-5 py-5 pt-6 min-h-[135px] flex flex-col justify-between space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">
-                      Pending Diagnosis
-                    </span>
-                    <span className="h-2 w-2 rounded-full bg-sky-500" />
-                  </div>
-                  <div className="flex items-end justify-between gap-2">
-                    <span className="text-3xl font-black text-slate-900 dark:text-white leading-none">
-                      {attentionItems.pendingDiagnosisCount}
-                    </span>
-                    <Link href="/jobs" className="shrink-0">
-                      <Button variant="outline" size="sm" className="px-3 py-1.5 text-xs font-semibold rounded-lg hover:bg-sky-50 hover:text-sky-600 hover:border-sky-300 transition-colors">
-                        Inspect →
-                      </Button>
-                    </Link>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-xs border-l-4 border-l-emerald-500 hover:shadow-md transition-all">
-                <CardContent className="px-5 py-5 pt-6 min-h-[135px] flex flex-col justify-between space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
-                      Ready / Diagnosed
-                    </span>
-                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                  </div>
-                  <div className="flex items-end justify-between gap-2">
-                    <span className="text-3xl font-black text-slate-900 dark:text-white leading-none">
-                      {attentionItems.readyDeliveryCount}
-                    </span>
-                    <Link href="/jobs" className="shrink-0">
-                      <Button variant="outline" size="sm" className="px-3 py-1.5 text-xs font-semibold rounded-lg hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-300 transition-colors">
-                        Review →
-                      </Button>
-                    </Link>
-                  </div>
-                </CardContent>
-              </Card>
             </div>
-          </div>
 
-          {/* 4. WORKFLOW PIPELINE INTERACTIVE STAGES */}
-          <Card className="shadow-xs">
-            <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
-              <CardTitle className="text-base font-bold flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <span>🔄</span> Repair Job Workflow Stages
+            {/* 3. SLEEK SEGMENTED REPAIR PIPELINE (ONE-CLICK FILTER) */}
+            <div className="bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-2 overflow-x-auto">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider px-3 whitespace-nowrap">
+                Filter Stage:
+              </span>
+
+              <button
+                onClick={() => setSelectedStage("ALL")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                  selectedStage === "ALL"
+                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
+                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                }`}
+              >
+                <span>All Active</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20">
+                  {kpis.activeCount}
                 </span>
-                {selectedPipelineStage && (
-                  <Button variant="ghost" size="sm" onClick={() => setSelectedPipelineStage("")}>
-                    Reset Filter
-                  </Button>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              </button>
+
+              <button
+                onClick={() => setSelectedStage("received")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                  selectedStage === "received"
+                    ? "bg-sky-600 text-white shadow-xs"
+                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                }`}
+              >
+                <span>📥 1. Received Intake</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-sky-100 text-sky-800">
+                  {pipeline.received}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setSelectedStage("diagnosis_pending")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                  selectedStage === "diagnosis_pending"
+                    ? "bg-amber-500 text-white shadow-xs"
+                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                }`}
+              >
+                <span>🔍 2. Diagnosing</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-800">
+                  {pipeline.diagnosis_pending}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setSelectedStage("diagnosed")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                  selectedStage === "diagnosed"
+                    ? "bg-[#009688] text-white shadow-xs"
+                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                }`}
+              >
+                <span>🔧 3. Ready / Repaired</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-teal-100 text-teal-800">
+                  {pipeline.diagnosed}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setSelectedStage("unrepairable")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                  selectedStage === "unrepairable"
+                    ? "bg-rose-600 text-white shadow-xs"
+                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                }`}
+              >
+                <span>❌ Unrepairable</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-100 text-rose-800">
+                  {pipeline.unrepairable}
+                </span>
+              </button>
+
+              {selectedStage !== "ALL" && (
                 <button
-                  onClick={() => setSelectedPipelineStage(selectedPipelineStage === "received" ? "" : "received")}
-                  className={`p-3 rounded-xl border text-left transition-all ${
-                    selectedPipelineStage === "received"
-                      ? "border-sky-500 bg-sky-50 dark:bg-sky-950/40 shadow-xs"
-                      : "border-slate-200 dark:border-slate-800 hover:border-slate-300"
-                  }`}
+                  onClick={() => setSelectedStage("ALL")}
+                  className="text-xs text-slate-400 hover:text-slate-600 underline font-semibold ml-auto pr-2 whitespace-nowrap"
                 >
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-sky-600 block">1. Received Intake</span>
-                  <span className="text-xl font-black text-slate-900 dark:text-white block mt-0.5">
-                    {pipelineCounts.received}
-                  </span>
+                  Reset
                 </button>
-
-                <button
-                  onClick={() => setSelectedPipelineStage(selectedPipelineStage === "diagnosis_pending" ? "" : "diagnosis_pending")}
-                  className={`p-3 rounded-xl border text-left transition-all ${
-                    selectedPipelineStage === "diagnosis_pending"
-                      ? "border-amber-500 bg-amber-50 dark:bg-amber-950/40 shadow-xs"
-                      : "border-slate-200 dark:border-slate-800 hover:border-slate-300"
-                  }`}
-                >
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 block">2. In Diagnosis</span>
-                  <span className="text-xl font-black text-slate-900 dark:text-white block mt-0.5">
-                    {pipelineCounts.diagnosis}
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => setSelectedPipelineStage(selectedPipelineStage === "diagnosed" ? "" : "diagnosed")}
-                  className={`p-3 rounded-xl border text-left transition-all ${
-                    selectedPipelineStage === "diagnosed"
-                      ? "border-[#009688] bg-[#e0f2f1] dark:bg-[#004d40]/30 shadow-xs"
-                      : "border-slate-200 dark:border-slate-800 hover:border-slate-300"
-                  }`}
-                >
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#009688] block">3. Ready for Repair</span>
-                  <span className="text-xl font-black text-slate-900 dark:text-white block mt-0.5">
-                    {pipelineCounts.diagnosed}
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => setSelectedPipelineStage(selectedPipelineStage === "unrepairable" ? "" : "unrepairable")}
-                  className={`p-3 rounded-xl border text-left transition-all ${
-                    selectedPipelineStage === "unrepairable"
-                      ? "border-rose-500 bg-rose-50 dark:bg-rose-950/40 shadow-xs"
-                      : "border-slate-200 dark:border-slate-800 hover:border-slate-300"
-                  }`}
-                >
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 block">4. Unrepairable</span>
-                  <span className="text-xl font-black text-slate-900 dark:text-white block mt-0.5">
-                    {pipelineCounts.unrepairable}
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => setSelectedPipelineStage(selectedPipelineStage === "cancelled" ? "" : "cancelled")}
-                  className={`p-3 rounded-xl border text-left transition-all ${
-                    selectedPipelineStage === "cancelled"
-                      ? "border-slate-500 bg-slate-100 dark:bg-slate-800 shadow-xs"
-                      : "border-slate-200 dark:border-slate-800 hover:border-slate-300"
-                  }`}
-                >
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">5. Cancelled</span>
-                  <span className="text-xl font-black text-slate-900 dark:text-white block mt-0.5">
-                    {pipelineCounts.cancelled}
-                  </span>
-                </button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 5 & 6. RECENT REPAIR JOBS & CRM ACTIVITY STREAM */}
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            {/* Recent Jobs Queue (2 Columns) */}
-            <div className="xl:col-span-2 space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <span>📋</span> Active Repair Queue
-                </h2>
-                <Link href="/jobs">
-                  <Button variant="outline" size="sm">
-                    View All Jobs →
-                  </Button>
-                </Link>
-              </div>
-
-              {filteredRecentJobs.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Job ID</TableHead>
-                      <TableHead>Branch & Category</TableHead>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Device</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredRecentJobs.map((job) => {
-                      const branchInfo = job.branch ? BRANCHES[job.branch] : BRANCHES["south_bopal"];
-                      const catInfo = job.category_type ? CATEGORIES[job.category_type] : CATEGORIES["laptop_general"];
-
-                      return (
-                        <TableRow
-                          key={job.id}
-                          className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900"
-                          onClick={() => router.push(`/jobs/${job.id}`)}
-                        >
-                          <TableCell className="font-mono text-xs font-semibold">
-                            <Badge variant="primary">{job.job_code}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col gap-1">
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border w-max ${branchInfo.badgeColor}`}>
-                                📍 {branchInfo.shortName}
-                              </span>
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border w-max ${catInfo.badgeColor}`}>
-                                {catInfo.icon} {catInfo.shortName}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="font-medium text-slate-900 dark:text-white">
-                            {job.customer?.full_name || "—"}
-                          </TableCell>
-                          <TableCell className="text-xs text-slate-600 dark:text-slate-300">
-                            {job.device ? `${job.device.brand} ${job.device.model}` : "—"}
-                          </TableCell>
-                          <TableCell>
-                            <JobStatusBadge status={job.status} />
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Link href={`/jobs/${job.id}`} onClick={(e) => e.stopPropagation()}>
-                              <Button variant="outline" size="sm">
-                                View
-                              </Button>
-                            </Link>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              ) : (
-                <EmptyState
-                  title="No repair jobs found"
-                  description="No repair jobs match your current branch or category selection."
-                />
               )}
             </div>
 
-            {/* Recent CRM Activity Stream (1 Column) */}
-            <div className="space-y-4">
-              <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <span>📡</span> Operations Activity Stream
-              </h2>
+            {/* 4. MAIN WORKSPACE: ACTIVE QUEUE (LEFT) + ACTION INTELLIGENCE (RIGHT) */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-              <Card className="shadow-xs">
-                <CardContent className="p-4 space-y-4">
-                  {recentActivities.length > 0 ? (
-                    <div className="space-y-3">
-                      {recentActivities.map((act) => (
+              {/* LEFT 2 COLUMNS: ACTIVE REPAIR TICKETS QUEUE */}
+              <div className="lg:col-span-2 space-y-4">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-4 space-y-4">
+                  
+                  {/* Queue Tabs + Search Bar */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setActiveQueueTab("all")}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                          activeQueueTab === "all"
+                            ? "bg-[#009688] text-white shadow-xs"
+                            : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        All Active Queue
+                      </button>
+
+                      <button
+                        onClick={() => setActiveQueueTab("attention")}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                          activeQueueTab === "attention"
+                            ? "bg-amber-500 text-white shadow-xs"
+                            : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        <span>🚨 Needs Action</span>
+                        {kpis.attentionCount > 0 && (
+                          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white text-amber-700 font-black">
+                            {kpis.attentionCount}
+                          </span>
+                        )}
+                      </button>
+
+                      <button
+                        onClick={() => setActiveQueueTab("ready")}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                          activeQueueTab === "ready"
+                            ? "bg-emerald-600 text-white shadow-xs"
+                            : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        Ready for Pickup
+                      </button>
+                    </div>
+
+                    {/* Instant Search Bar */}
+                    <div className="relative w-full sm:w-64">
+                      <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                      <input
+                        type="text"
+                        placeholder="Search ticket, customer, phone..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#009688]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Clean, High-Information Ticket List */}
+                  {activeQueue.length > 0 ? (
+                    <div className="space-y-2.5">
+                      {activeQueue.map((job) => {
+                        const branchInfo = job.branch ? BRANCHES[job.branch] : BRANCHES["south_bopal"];
+                        const catInfo = job.category_type ? CATEGORIES[job.category_type] : CATEGORIES["laptop_general"];
+                        const customerPhone = job.customer?.phone;
+
+                        return (
+                          <div
+                            key={job.id}
+                            onClick={() => router.push(`/jobs/${job.id}`)}
+                            className="p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-[#009688]/60 bg-white dark:bg-slate-900/60 hover:shadow-xs transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+                          >
+                            {/* Device & Ticket Details */}
+                            <div className="flex items-start gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-slate-700 dark:text-slate-300 shrink-0 text-base group-hover:bg-[#009688]/10 group-hover:text-[#009688] transition-colors">
+                                {job.category_type === "drone" ? "🚁" : "💻"}
+                              </div>
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-mono text-xs font-black text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                                    {job.job_code}
+                                  </span>
+                                  <span className="font-bold text-sm text-slate-900 dark:text-white">
+                                    {job.device ? `${job.device.brand} ${job.device.model}` : "Unknown Device"}
+                                  </span>
+                                  <JobPriorityBadge priority={job.priority} />
+                                </div>
+                                <p className="text-xs text-slate-500 line-clamp-1">
+                                  <span className="font-semibold text-slate-700 dark:text-slate-300">{job.customer?.full_name || "Walk-in Client"}</span>
+                                  {" • "}
+                                  <span className="text-slate-500">{job.customer_complaint}</span>
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Status, Assigned Tech & Quick Actions */}
+                            <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
+                              {/* Customer WhatsApp Quick Action */}
+                              {customerPhone && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const waMsg = `Hello ${job.customer?.full_name || "Customer"}, regarding your repair ticket ${job.job_code} at Robuzta Service Center:`;
+                                    window.open(buildWhatsAppClickUrl(customerPhone, waMsg), "_blank");
+                                  }}
+                                  title="Chat on WhatsApp"
+                                  className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-lg transition-colors"
+                                >
+                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.006c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.86.173.086.275.072.376-.044.101-.116.433-.506.549-.68.116-.173.231-.145.39-.086s1.011.477 1.184.564.289.13.332.202c.045.072.045.419-.099.824z" />
+                                  </svg>
+                                </button>
+                              )}
+
+                              {/* Tech Assigned badge */}
+                              {job.assigned_employee ? (
+                                <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg">
+                                  👨‍🔧 {job.assigned_employee.full_name.split(" ")[0]}
+                                </span>
+                              ) : (
+                                <span className="text-[11px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/40 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-900">
+                                  ⚠️ Unassigned
+                                </span>
+                              )}
+
+                              <JobStatusBadge status={job.status} />
+
+                              <span className="text-xs text-slate-400 group-hover:text-[#009688] font-bold">
+                                →
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <EmptyState
+                      title="No tickets match this filter"
+                      description="No repair jobs found in current queue. Click '+ New Job Card' to create one."
+                    />
+                  )}
+
+                  {/* View All Tickets Link */}
+                  <div className="pt-2 text-center border-t border-slate-100 dark:border-slate-800">
+                    <Link
+                      href="/jobs"
+                      className="text-xs font-bold text-[#009688] hover:text-[#00796b] inline-flex items-center gap-1"
+                    >
+                      <span>Open Full Repair Jobs Database ({filteredJobs.length} tickets)</span>
+                      <span>→</span>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT 1 COLUMN: TECHNICIAN WORKLOAD + LIVE TIMELINE */}
+              <div className="space-y-4">
+                
+                {/* Widget 1: Technician Live Workload */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <span>👨‍🔧</span> Technician Load
+                    </h3>
+                    <Link href="/employees" className="text-xs text-[#009688] hover:underline font-semibold">
+                      Manage →
+                    </Link>
+                  </div>
+
+                  <div className="space-y-3">
+                    {technicianStats.length > 0 ? (
+                      technicianStats.slice(0, 5).map((tech) => {
+                        const isBusy = tech.activeJobs >= 4;
+                        const isFree = tech.activeJobs === 0;
+
+                        return (
+                          <div key={tech.id} className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-full bg-[#009688]/10 text-[#009688] font-black flex items-center justify-center text-xs">
+                                {tech.full_name.charAt(0)}
+                              </div>
+                              <div>
+                                <p className="font-bold text-slate-900 dark:text-white line-clamp-1">
+                                  {tech.full_name}
+                                </p>
+                                <p className="text-[10px] text-slate-400 capitalize">
+                                  {tech.specialization || tech.role}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="text-right">
+                              <span
+                                className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${
+                                  isFree
+                                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                                    : isBusy
+                                    ? "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
+                                    : "bg-teal-50 text-teal-800 dark:bg-teal-950/40 dark:text-teal-200"
+                                }`}
+                              >
+                                {tech.activeJobs} {tech.activeJobs === 1 ? "Job" : "Jobs"}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <p className="text-xs text-slate-400 py-3 text-center">No active technicians registered.</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Widget 2: Live Activity Feed */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <span>📡</span> Live Shop Updates
+                    </h3>
+                    <span className="text-[10px] font-mono text-slate-400 font-bold">RECENT</span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {recentActivities.length > 0 ? (
+                      recentActivities.map((act) => (
                         <Link
                           key={act.id}
                           href={act.link}
-                          className="block p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 hover:border-[#009688]/40 transition-all space-y-1"
+                          className="block p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-[#009688]/40 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-all space-y-1"
                         >
                           <div className="flex items-center justify-between">
-                            <span className="font-bold text-slate-900 dark:text-white text-xs">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white">
                               {act.title}
                             </span>
                             <span className="text-[10px] text-slate-400 font-mono">
-                              {formatDate(act.timestamp)}
+                              {getTimeAgo(act.timestamp)}
                             </span>
                           </div>
-                          <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2">
+                          <p className="text-[11px] text-slate-500 line-clamp-1">
                             {act.description}
                           </p>
                         </Link>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-400 text-center py-6">No recent operations recorded.</p>
-                  )}
-                </CardContent>
-              </Card>
+                      ))
+                    ) : (
+                      <p className="text-xs text-slate-400 text-center py-4">No recent shop activity.</p>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
+
+      </div>
     </AppShell>
   );
 }
