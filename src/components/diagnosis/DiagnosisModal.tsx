@@ -3,7 +3,7 @@
 import { useState, useEffect, FormEvent } from "react";
 import { Modal, Button, Input, Alert } from "@/components/ui";
 import { DiagnosisFormData, DiagnosisFormErrors, Diagnosis } from "@/types/diagnosis";
-import { createClient } from "@/lib/supabase/client";
+import { addDiagnosis } from "@/modules/jobs";
 
 export interface DiagnosisModalProps {
   isOpen: boolean;
@@ -34,8 +34,6 @@ export function DiagnosisModal({
   const [errors, setErrors] = useState<DiagnosisFormErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const supabase = createClient();
 
   useEffect(() => {
     if (isOpen) {
@@ -86,38 +84,11 @@ export function DiagnosisModal({
     setError(null);
 
     try {
-      const costVal = formData.estimated_cost !== "" && formData.estimated_cost !== undefined
-        ? Number(formData.estimated_cost)
-        : null;
+      const res = await addDiagnosis(jobId, formData, assignedEmployeeId);
 
-      // 1. Insert new diagnosis record
-      const { error: insertErr } = await supabase.from("diagnoses").insert({
-        repair_job_id: jobId,
-        employee_id: assignedEmployeeId || null,
-        diagnosis: formData.diagnosis.trim(),
-        recommended_action: formData.recommended_action?.trim() || null,
-        estimated_cost: costVal,
-        notes: formData.notes?.trim() || null,
-      });
-
-      if (insertErr) throw insertErr;
-
-      // 2. Update repair job status to 'diagnosed' and update estimated_cost
-      const jobUpdatePayload: { status: string; updated_at: string; estimated_cost?: number | null } = {
-        status: "diagnosed",
-        updated_at: new Date().toISOString(),
-      };
-
-      if (costVal !== null) {
-        jobUpdatePayload.estimated_cost = costVal;
+      if (res.error) {
+        throw new Error(res.error);
       }
-
-      const { error: updateJobErr } = await supabase
-        .from("repair_jobs")
-        .update(jobUpdatePayload)
-        .eq("id", jobId);
-
-      if (updateJobErr) throw updateJobErr;
 
       onSaved();
       onClose();

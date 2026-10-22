@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/client";
 import { RepairJob, RepairJobFormData, JobStatus } from "@/types/job";
 import { JobAssignment } from "@/types/employee";
-import { Diagnosis } from "@/types/diagnosis";
+import { Diagnosis, DiagnosisFormData } from "@/types/diagnosis";
 import { PartRequest } from "@/types/partRequest";
 
 /**
@@ -307,6 +307,57 @@ export async function assignTechnician(
     return { success: true, error: null };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Failed to assign technician.";
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * Add or record a repair diagnosis for a job and mark job as diagnosed
+ */
+export async function addDiagnosis(
+  jobId: string,
+  formData: DiagnosisFormData,
+  assignedEmployeeId?: string | null
+): Promise<{ success: boolean; error: string | null }> {
+  const supabase = createClient();
+  try {
+    const costVal =
+      formData.estimated_cost !== "" && formData.estimated_cost !== undefined
+        ? Number(formData.estimated_cost)
+        : null;
+
+    // 1. Insert new diagnosis record
+    const { error: insertErr } = await supabase.from("diagnoses").insert({
+      repair_job_id: jobId,
+      employee_id: assignedEmployeeId || null,
+      diagnosis: formData.diagnosis.trim(),
+      recommended_action: formData.recommended_action?.trim() || null,
+      estimated_cost: costVal,
+      notes: formData.notes?.trim() || null,
+    });
+
+    if (insertErr) throw insertErr;
+
+    // 2. Update repair job status to 'diagnosed' and update estimated_cost
+    const jobUpdatePayload: { status: string; updated_at: string; estimated_cost?: number | null } = {
+      status: "diagnosed",
+      updated_at: new Date().toISOString(),
+    };
+
+    if (costVal !== null) {
+      jobUpdatePayload.estimated_cost = costVal;
+    }
+
+    const { error: updateJobErr } = await supabase
+      .from("repair_jobs")
+      .update(jobUpdatePayload)
+      .eq("id", jobId);
+
+    if (updateJobErr) throw updateJobErr;
+
+    return { success: true, error: null };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Failed to save diagnosis.";
     return { success: false, error: msg };
   }
 }
