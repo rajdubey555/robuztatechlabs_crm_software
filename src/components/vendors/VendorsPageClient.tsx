@@ -2,10 +2,9 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { Vendor } from "@/types/vendor";
+import { Vendor, getVendors, deleteVendor, togglePreferredVendor } from "@/modules/procurement";
 import { VendorModal } from "./VendorModal";
-import { createClient } from "@/lib/supabase/client";
-import { buildWhatsAppClickUrl } from "@/services/whatsappService";
+import { buildWhatsAppClickUrl } from "@/modules/procurement";
 import { Modal, Button } from "@/components/ui";
 import { useBranchContext } from "@/context/BranchContext";
 
@@ -96,18 +95,12 @@ export function VendorsPageClient({ initialVendors = [], userEmail }: VendorsPag
   const [vendorToDelete, setVendorToDelete] = useState<Vendor | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const supabase = createClient();
-
   const fetchVendors = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("vendors")
-        .select("*")
-        .order("name", { ascending: true });
-
-      if (error) throw error;
-      if (data) setVendors(data as Vendor[]);
+      const res = await getVendors();
+      if (res.error) throw new Error(res.error);
+      setVendors(res.data);
     } catch (err) {
       console.error("Error fetching vendors:", err);
     } finally {
@@ -133,13 +126,9 @@ export function VendorsPageClient({ initialVendors = [], userEmail }: VendorsPag
     if (!vendorToDelete) return;
     setDeleting(true);
     try {
-      const { error } = await supabase
-        .from("vendors")
-        .delete()
-        .eq("id", vendorToDelete.id);
-
-      if (error) {
-        alert("Failed to delete vendor: " + error.message);
+      const res = await deleteVendor(vendorToDelete.id);
+      if (res.error) {
+        alert("Failed to delete vendor: " + res.error);
       } else {
         fetchVendors();
         setVendorToDelete(null);
@@ -154,12 +143,8 @@ export function VendorsPageClient({ initialVendors = [], userEmail }: VendorsPag
   // Quick toggle preferred status
   const handleTogglePreferred = async (vendor: Vendor) => {
     try {
-      const { error } = await supabase
-        .from("vendors")
-        .update({ is_preferred: !vendor.is_preferred })
-        .eq("id", vendor.id);
-
-      if (!error) fetchVendors();
+      const res = await togglePreferredVendor(vendor.id, vendor.is_preferred);
+      if (res.success) fetchVendors();
     } catch (err) {
       console.error("Error toggling preferred status:", err);
     }
@@ -180,7 +165,7 @@ export function VendorsPageClient({ initialVendors = [], userEmail }: VendorsPag
   const totalCount = vendors.length;
   const preferredCount = vendors.filter((v) => v.is_preferred).length;
   const activeCount = vendors.filter((v) => v.is_active).length;
-  const categories = Array.from(new Set(vendors.map((v) => v.category).filter(Boolean)));
+  const categories = Array.from(new Set(vendors.map((v) => v.category).filter((c): c is string => Boolean(c))));
 
   const handleOpenWhatsApp = (v: Vendor) => {
     const phone = v.whatsapp_number || v.phone;

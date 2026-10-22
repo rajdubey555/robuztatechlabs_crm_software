@@ -3,11 +3,9 @@
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Device } from "@/types/device";
+import { Device, getDevices, DeviceSearch, DeviceTable } from "@/modules/devices";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Alert, LoadingSpinner, EmptyState } from "@/components/ui";
-import { DeviceSearch } from "@/components/devices/DeviceSearch";
-import { DeviceTable } from "@/components/devices/DeviceTable";
 import { useBranchContext } from "@/context/BranchContext";
 
 export default function DevicesListPage() {
@@ -30,24 +28,13 @@ export default function DevicesListPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) setUserEmail(user.email);
 
-      // Fetch devices with customer details
-      const { data, error: fetchError } = await supabase
-        .from("devices")
-        .select(`
-          *,
-          customer:customers (
-            id,
-            customer_code,
-            full_name,
-            phone
-          )
-        `)
-        .order("created_at", { ascending: false });
+      // Fetch devices via deviceService
+      const { data, error: fetchError } = await getDevices();
 
       if (fetchError) {
-        setError("Failed to load devices: " + fetchError.message);
+        setError("Failed to load devices: " + fetchError);
       } else {
-        setDevices(data || []);
+        setDevices(data);
       }
       setLoading(false);
     }

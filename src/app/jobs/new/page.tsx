@@ -4,9 +4,9 @@ import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { RepairJobFormData } from "@/types/job";
-import { Customer } from "@/types/customer";
-import { Device } from "@/types/device";
+import { RepairJobFormData, createJob } from "@/modules/jobs";
+import { Customer, getCustomers } from "@/modules/customers";
+import { Device, getDevices } from "@/modules/devices";
 import { AppShell } from "@/components/layout/AppShell";
 import { Alert, LoadingSpinner, EmptyState, Button } from "@/components/ui";
 import { JobForm } from "@/components/jobs/JobForm";
@@ -24,48 +24,39 @@ function NewJobContent() {
   const [error, setError] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | undefined>();
 
-  const supabase = createClient();
-
   useEffect(() => {
     async function loadData() {
       setLoading(true);
       setError(null);
 
       // Get user
+      const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (user) setUserEmail(user.email);
 
       // Fetch customers
-      const { data: custData, error: custError } = await supabase
-        .from("customers")
-        .select("*")
-        .order("full_name", { ascending: true });
-
-      if (custError) {
-        setError("Failed to load customers: " + custError.message);
+      const custRes = await getCustomers();
+      if (custRes.error) {
+        setError("Failed to load customers: " + custRes.error);
         setLoading(false);
         return;
       }
-      setCustomers(custData || []);
+      setCustomers(custRes.data);
 
       // Fetch all devices
-      const { data: devData, error: devError } = await supabase
-        .from("devices")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (devError) {
-        setError("Failed to load devices: " + devError.message);
+      const devRes = await getDevices();
+      if (devRes.error) {
+        setError("Failed to load devices: " + devRes.error);
         setLoading(false);
         return;
       }
-      setAllDevices(devData || []);
+      setAllDevices(devRes.data);
 
       setLoading(false);
     }
 
     loadData();
-  }, [supabase]);
+  }, []);
 
   const handleCreateJob = async (formData: RepairJobFormData) => {
     setSubmitting(true);
@@ -80,37 +71,16 @@ function NewJobContent() {
         return;
       }
 
-      const estimatedCost =
-        formData.estimated_cost !== "" && formData.estimated_cost !== undefined
-          ? Number(formData.estimated_cost)
-          : null;
+      const res = await createJob(formData);
 
-      const { data: job, error: insertError } = await supabase
-        .from("repair_jobs")
-        .insert([
-          {
-            customer_id: formData.customer_id,
-            device_id: formData.device_id,
-            branch: formData.branch || "south_bopal",
-            category_type: formData.category_type || "laptop_general",
-            customer_complaint: formData.customer_complaint.trim(),
-            priority: formData.priority,
-            status: "received",
-            estimated_cost: estimatedCost,
-            expected_delivery_at: formData.expected_delivery_at || null,
-          },
-        ])
-        .select()
-        .single();
-
-      if (insertError || !job) {
-        setError("Failed to create job card: " + (insertError?.message || "Unknown error"));
+      if (res.error || !res.data) {
+        setError("Failed to create job card: " + (res.error || "Unknown error"));
         setSubmitting(false);
         return;
       }
 
       // Successful creation -> Redirect to Job Detail page
-      router.push(`/jobs/${job.id}`);
+      router.push(`/jobs/${res.data.id}`);
       router.refresh();
     } catch {
       setError("An unexpected error occurred. Please try again.");

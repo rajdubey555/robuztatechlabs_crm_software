@@ -21,6 +21,8 @@ export interface PartRequest {
   job_card_number?: string;
   customer_name?: string;
   device_model?: string;
+  branch?: "south_bopal" | "tragad" | "both" | string | null;
+  category_type?: "laptop" | "drone" | string | null;
   ordered_at?: string;
   received_at?: string;
   created_at: string;

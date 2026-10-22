@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { RepairJob, JobStatus } from "@/types/job";
+import { RepairJob, JobStatus, getJobById, updateJobStatus } from "@/modules/jobs";
 import { JobAssignment } from "@/types/employee";
 import { Diagnosis } from "@/types/diagnosis";
 import { PartRequest } from "@/types/partRequest";
@@ -58,71 +58,25 @@ export default function JobDetailPage() {
   // Part Request Modal State
   const [isPartRequestModalOpen, setIsPartRequestModalOpen] = useState(false);
 
-  const supabase = createClient();
-
   const loadJob = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     setError(null);
 
     try {
+      const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (user) setUserEmail(user.email);
 
-      // Fetch job with customer, device & assigned employee
-      const { data, error: fetchError } = await supabase
-        .from("repair_jobs")
-        .select(`
-          *,
-          customer:customers (*),
-          device:devices (*),
-          assigned_employee:employees!repair_jobs_assigned_employee_id_fkey (*)
-        `)
-        .eq("id", id)
-        .single();
-
-      if (fetchError || !data) {
-        setError("Job card not found or error loading data.");
+      const res = await getJobById(id);
+      if (res.error || !res.data.job) {
+        setError(res.error || "Job card not found or error loading data.");
       } else {
-        setJob(data);
-        setNewStatus(data.status);
-
-        // Fetch assignment history
-        const { data: historyData } = await supabase
-          .from("job_assignments")
-          .select(`
-            *,
-            employee:employees (*)
-          `)
-          .eq("repair_job_id", id)
-          .order("assigned_at", { ascending: false });
-
-        if (historyData) setAssignmentsHistory(historyData);
-
-        // Fetch diagnosis history
-        const { data: diagData } = await supabase
-          .from("diagnoses")
-          .select(`
-            *,
-            employee:employees (*)
-          `)
-          .eq("repair_job_id", id)
-          .order("created_at", { ascending: false });
-
-        if (diagData) setDiagnoses(diagData);
-
-        // Fetch part requests
-        const { data: partReqData } = await supabase
-          .from("part_requests")
-          .select(`
-            *,
-            vendor:vendors(*),
-            requested_by_employee:employees!part_requests_requested_by_fkey(*)
-          `)
-          .eq("repair_job_id", id)
-          .order("created_at", { ascending: false });
-
-        if (partReqData) setPartRequests(partReqData as unknown as PartRequest[]);
+        setJob(res.data.job);
+        setNewStatus(res.data.job.status);
+        setAssignmentsHistory(res.data.assignmentsHistory);
+        setDiagnoses(res.data.diagnoses);
+        setPartRequests(res.data.partRequests);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to load job details.";
@@ -130,7 +84,7 @@ export default function JobDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [id, supabase]);
+  }, [id]);
 
   useEffect(() => {
     loadJob();
@@ -142,15 +96,10 @@ export default function JobDetailPage() {
     setError(null);
 
     try {
-      const { error: updateError } = await supabase
-        .from("repair_jobs")
-        .update({
-          status: newStatus,
-        })
-        .eq("id", id);
+      const res = await updateJobStatus(id, newStatus);
 
-      if (updateError) {
-        setError("Failed to update status: " + updateError.message);
+      if (res.error) {
+        setError("Failed to update status: " + res.error);
         setUpdatingStatus(false);
         return;
       }

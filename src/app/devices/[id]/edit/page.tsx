@@ -4,11 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Device, DeviceFormData } from "@/types/device";
-import { Customer } from "@/types/customer";
+import { Device, DeviceFormData, getDeviceById, updateDevice, DeviceForm } from "@/modules/devices";
+import { Customer, getCustomers } from "@/modules/customers";
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge, Alert, LoadingSpinner } from "@/components/ui";
-import { DeviceForm } from "@/components/devices/DeviceForm";
 import { convertToWebP } from "@/lib/image-utils";
 
 export default function EditDevicePage() {
@@ -35,26 +34,19 @@ export default function EditDevicePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) setUserEmail(user.email);
 
-      // Fetch device
-      const { data: deviceData, error: deviceError } = await supabase
-        .from("devices")
-        .select(`
-          *,
-          customer:customers (*)
-        `)
-        .eq("id", id)
-        .single();
+      // Fetch device via service
+      const { data: deviceData, error: deviceError } = await getDeviceById(id);
 
       if (deviceError || !deviceData) {
-        setError("Failed to load device: " + (deviceError?.message || "Not found"));
+        setError(deviceError || "Failed to load device.");
         setLoading(false);
         return;
       }
 
       setDevice(deviceData);
 
-      // Fetch customers
-      const { data: custData } = await supabase.from("customers").select("*");
+      // Fetch customers via customerService
+      const { data: custData } = await getCustomers();
       setCustomers(custData || []);
 
       setLoading(false);

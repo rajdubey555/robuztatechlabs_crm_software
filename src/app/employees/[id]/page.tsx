@@ -11,6 +11,7 @@ import { EmployeeRoleBadge } from "@/components/employees/EmployeeRoleBadge";
 import { JobStatusBadge } from "@/components/jobs/JobStatusBadge";
 import { JobPriorityBadge } from "@/components/jobs/JobPriorityBadge";
 import { BRANCHES } from "@/types/branch";
+import { getEmployeeById, getEmployeeAssignedJobs } from "@/modules/employees";
 
 export default function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -22,42 +23,31 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   const [error, setError] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | undefined>();
 
-  const supabase = createClient();
-
   useEffect(() => {
     async function loadData() {
       setLoading(true);
       setError(null);
 
       try {
+        const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           setUserEmail(user.email);
         }
 
         // Fetch employee details
-        const { data: empData, error: empError } = await supabase
-          .from("employees")
-          .select("*")
-          .eq("id", employeeId)
-          .single();
-
-        if (empError) throw empError;
-        setEmployee(empData);
+        const empRes = await getEmployeeById(employeeId);
+        if (empRes.error || !empRes.data) {
+          throw new Error(empRes.error || "Employee not found");
+        }
+        setEmployee(empRes.data);
 
         // Fetch assigned repair jobs
-        const { data: jobsData, error: jobsError } = await supabase
-          .from("repair_jobs")
-          .select(`
-            *,
-            customer:customers(id, customer_code, full_name, phone),
-            device:devices(id, device_code, device_type, brand, model)
-          `)
-          .eq("assigned_employee_id", employeeId)
-          .order("created_at", { ascending: false });
-
-        if (jobsError) throw jobsError;
-        setAssignedJobs(jobsData || []);
+        const jobsRes = await getEmployeeAssignedJobs(employeeId);
+        if (jobsRes.error) {
+          console.error("Failed to load assigned jobs:", jobsRes.error);
+        }
+        setAssignedJobs(jobsRes.data || []);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Failed to load employee profile.";
         setError(message);
@@ -67,7 +57,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     }
 
     loadData();
-  }, [employeeId, supabase]);
+  }, [employeeId]);
 
   if (loading) {
     return (
@@ -131,9 +121,9 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                 ) : (
                   <Badge variant="default">Inactive</Badge>
                 )}
-                {(employee as unknown as { branch?: string }).branch && (
-                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${BRANCHES[(employee as unknown as { branch: "south_bopal" | "tragad" }).branch]?.badgeColor || "bg-teal-50 text-teal-800 border-teal-300"}`}>
-                    📍 {(employee as unknown as { branch: string }).branch === "both" ? "Both Branches" : BRANCHES[(employee as unknown as { branch: "south_bopal" | "tragad" }).branch]?.shortName || (employee as unknown as { branch: string }).branch}
+                {employee.branch && (
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${BRANCHES[employee.branch as "south_bopal" | "tragad"]?.badgeColor || "bg-teal-50 text-teal-800 border-teal-300"}`}>
+                    📍 {employee.branch === "both" ? "Both Branches" : BRANCHES[employee.branch as "south_bopal" | "tragad"]?.shortName || employee.branch}
                   </span>
                 )}
               </div>

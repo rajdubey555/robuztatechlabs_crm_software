@@ -3,11 +3,9 @@
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Employee } from "@/types/employee";
+import { Employee, getEmployeesWithWorkload, EmployeeSearch, EmployeeTable } from "@/modules/employees";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Alert, LoadingSpinner, EmptyState } from "@/components/ui";
-import { EmployeeSearch } from "@/components/employees/EmployeeSearch";
-import { EmployeeTable } from "@/components/employees/EmployeeTable";
 import { useBranchContext } from "@/context/BranchContext";
 
 export default function EmployeesListPage() {
@@ -37,44 +35,12 @@ export default function EmployeesListPage() {
           setUserEmail(user.email);
         }
 
-        // Fetch employees
-        const { data: empData, error: empError } = await supabase
-          .from("employees")
-          .select("*")
-          .order("created_at", { ascending: false });
+        // Fetch employees with workload via employeeService
+        const { data, error: empError } = await getEmployeesWithWorkload();
 
-        if (empError) throw empError;
+        if (empError) throw new Error(empError);
 
-        if (!empData || empData.length === 0) {
-          setEmployees([]);
-          setLoading(false);
-          return;
-        }
-
-        // Fetch active repair jobs to compute workload
-        const { data: activeJobsData, error: jobsErr } = await supabase
-          .from("repair_jobs")
-          .select("assigned_employee_id")
-          .not("assigned_employee_id", "is", null)
-          .not("status", "in", '("delivered","closed","cancelled","unrepairable")');
-
-        if (jobsErr) {
-          console.warn("Could not fetch active jobs for workload count:", jobsErr);
-        }
-
-        const activeCountMap: Record<string, number> = {};
-        (activeJobsData || []).forEach((j) => {
-          if (j.assigned_employee_id) {
-            activeCountMap[j.assigned_employee_id] = (activeCountMap[j.assigned_employee_id] || 0) + 1;
-          }
-        });
-
-        const formattedEmployees = empData.map((e) => ({
-          ...e,
-          active_job_count: activeCountMap[e.id] || 0,
-        }));
-
-        setEmployees(formattedEmployees);
+        setEmployees(data);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Failed to load employees.";
         setError(message);
@@ -90,7 +56,7 @@ export default function EmployeesListPage() {
   const filteredEmployees = useMemo(() => {
     return employees.filter((emp) => {
       // Branch context filter
-      if (selectedBranch !== "all" && (emp as unknown as { branch?: string }).branch && (emp as unknown as { branch?: string }).branch !== "both" && (emp as unknown as { branch?: string }).branch !== selectedBranch) {
+      if (selectedBranch !== "all" && emp.branch && emp.branch !== "both" && emp.branch !== selectedBranch) {
         return false;
       }
 

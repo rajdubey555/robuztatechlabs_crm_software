@@ -3,7 +3,6 @@
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { RepairJob } from "@/types/job";
 import { Customer } from "@/types/customer";
 import { Device } from "@/types/device";
@@ -15,23 +14,20 @@ import { JobStatusBadge } from "@/components/jobs/JobStatusBadge";
 import { JobPriorityBadge } from "@/components/jobs/JobPriorityBadge";
 import { useBranchContext } from "@/context/BranchContext";
 import { BRANCHES, CATEGORIES } from "@/types/branch";
+import {
+  getDashboardData,
+  calculateDashboardMetrics,
+  calculateAttentionMetrics,
+  calculatePipelineCounts,
+  ActivityItem,
+} from "@/modules/dashboard";
 
 export interface DashboardClientProps {
   userEmail?: string;
 }
 
-interface ActivityItem {
-  id: string;
-  type: "job" | "assignment" | "diagnosis";
-  title: string;
-  description: string;
-  timestamp: string;
-  link: string;
-}
-
 export function DashboardClient({ userEmail }: DashboardClientProps) {
   const router = useRouter();
-  const supabase = createClient();
   const { selectedBranch, selectedCategory, activeBranchInfo, activeCategoryInfo, isFiltered, clearFilters } = useBranchContext();
 
   const [loading, setLoading] = useState(true);
@@ -54,49 +50,14 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
       setError(null);
 
       try {
-        // 1. Fetch Repair Jobs with Customer, Device & Assigned Employee
-        const { data: jobsData, error: jobsErr } = await supabase
-          .from("repair_jobs")
-          .select(`
-            *,
-            customer:customers(id, customer_code, full_name, phone),
-            device:devices(id, device_code, brand, model, device_type),
-            assigned_employee:employees!repair_jobs_assigned_employee_id_fkey(id, employee_code, full_name, role)
-          `)
-          .order("created_at", { ascending: false });
+        const res = await getDashboardData();
+        if (res.error) throw new Error(res.error);
 
-        if (jobsErr) throw jobsErr;
-        setJobs((jobsData as unknown as RepairJob[]) || []);
-
-        // 2. Fetch Customers
-        const { data: custData } = await supabase
-          .from("customers")
-          .select("*");
-        setCustomers((custData as Customer[]) || []);
-
-        // 3. Fetch Devices
-        const { data: devData } = await supabase
-          .from("devices")
-          .select("*");
-        setDevices((devData as Device[]) || []);
-
-        // 4. Fetch Employees
-        const { data: empData } = await supabase
-          .from("employees")
-          .select("*");
-        setEmployees((empData as Employee[]) || []);
-
-        // 5. Fetch Recent Diagnoses for activity stream
-        const { data: diagData } = await supabase
-          .from("diagnoses")
-          .select(`
-            *,
-            employee:employees(id, full_name)
-          `)
-          .order("created_at", { ascending: false })
-          .limit(5);
-        setRecentDiagnoses((diagData as unknown as Diagnosis[]) || []);
-
+        setJobs(res.data.jobs);
+        setCustomers(res.data.customers);
+        setDevices(res.data.devices);
+        setEmployees(res.data.employees);
+        setRecentDiagnoses(res.data.recentDiagnoses);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Failed to load dashboard data.";
         setError(message);
@@ -106,7 +67,7 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
     }
 
     fetchDashboardData();
-  }, [supabase]);
+  }, []);
 
   // Dynamically Filtered Jobs by Branch & Category Context
   const filteredJobs = useMemo(() => {
@@ -137,71 +98,21 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
   // Dynamically Filtered Employees by Branch Context
   const filteredEmployeesCount = useMemo(() => {
     return employees.filter((e) => {
-      if (selectedBranch !== "all" && (e as unknown as { branch?: string }).branch && (e as unknown as { branch?: string }).branch !== "both" && (e as unknown as { branch?: string }).branch !== selectedBranch) return false;
+      if (selectedBranch !== "all" && e.branch && e.branch !== "both" && e.branch !== selectedBranch) return false;
       return true;
     }).length;
   }, [employees, selectedBranch]);
 
   // Metrics Calculations based on filtered jobs
-  const metrics = useMemo(() => {
-    const totalJobs = filteredJobs.length;
-    const pendingJobs = filteredJobs.filter(
-      (j) => !["delivered", "closed", "cancelled", "unrepairable"].includes(j.status)
-    ).length;
-    const completedJobs = filteredJobs.filter((j) =>
-      ["delivered", "closed", "diagnosed"].includes(j.status)
-    ).length;
-
-    const revenue = filteredJobs.reduce((acc, j) => {
-      const val = Number(j.final_cost || 0);
-      return acc + (isNaN(val) ? 0 : val);
-    }, 0);
-
-    return { totalJobs, pendingJobs, completedJobs, revenue };
-  }, [filteredJobs]);
+  const metrics = useMemo(() => calculateDashboardMetrics(filteredJobs), [filteredJobs]);
 
   // Needs Attention Calculations
-  const attentionItems = useMemo(() => {
-    const urgentJobs = filteredJobs.filter(
-      (j) =>
-        ["critical", "high"].includes(j.priority) &&
-        !["delivered", "closed", "cancelled", "unrepairable"].includes(j.status)
-    );
-
-    const unassignedJobs = filteredJobs.filter(
-      (j) =>
-        !j.assigned_employee_id &&
-        !["delivered", "closed", "cancelled", "unrepairable"].includes(j.status)
-    );
-
-    const pendingDiagnosisJobs = filteredJobs.filter(
-      (j) =>
-        ["received", "diagnosis_pending"].includes(j.status) &&
-        !["cancelled", "unrepairable"].includes(j.status)
-    );
-
-    const readyForDeliveryJobs = filteredJobs.filter(
-      (j) => j.status === "diagnosed"
-    );
-
-    return {
-      urgentCount: urgentJobs.length,
-      unassignedCount: unassignedJobs.length,
-      pendingDiagnosisCount: pendingDiagnosisJobs.length,
-      readyDeliveryCount: readyForDeliveryJobs.length,
-    };
-  }, [filteredJobs]);
+  const attentionItems = useMemo(() => calculateAttentionMetrics(filteredJobs), [filteredJobs]);
 
   // Workflow Pipeline Counts
-  const pipelineCounts = useMemo(() => {
-    return {
-      received: filteredJobs.filter((j) => j.status === "received").length,
-      diagnosis: filteredJobs.filter((j) => j.status === "diagnosis_pending").length,
-      diagnosed: filteredJobs.filter((j) => j.status === "diagnosed").length,
-      cancelled: filteredJobs.filter((j) => j.status === "cancelled").length,
-      unrepairable: filteredJobs.filter((j) => j.status === "unrepairable").length,
-    };
-  }, [filteredJobs]);
+  const pipelineCounts = useMemo(() => calculatePipelineCounts(filteredJobs), [filteredJobs]);
+
+
 
   // Filtered recent jobs for table view
   const filteredRecentJobs = useMemo(() => {

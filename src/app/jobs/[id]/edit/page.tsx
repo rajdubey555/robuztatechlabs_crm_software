@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { RepairJob, RepairJobFormData } from "@/types/job";
-import { Customer } from "@/types/customer";
-import { Device } from "@/types/device";
+import { RepairJob, RepairJobFormData, getJobById, updateJob } from "@/modules/jobs";
+import { Customer, getCustomers } from "@/modules/customers";
+import { Device, getDevices } from "@/modules/devices";
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge, Alert, LoadingSpinner } from "@/components/ui";
 import { JobForm } from "@/components/jobs/JobForm";
@@ -24,7 +24,6 @@ export default function EditJobPage() {
   const [userEmail, setUserEmail] = useState<string | undefined>();
 
   const router = useRouter();
-  const supabase = createClient();
 
   useEffect(() => {
     async function loadData() {
@@ -33,40 +32,32 @@ export default function EditJobPage() {
       setError(null);
 
       // Get user
+      const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (user) setUserEmail(user.email);
 
       // Fetch job
-      const { data: jobData, error: jobError } = await supabase
-        .from("repair_jobs")
-        .select(`
-          *,
-          customer:customers (*),
-          device:devices (*)
-        `)
-        .eq("id", id)
-        .single();
-
-      if (jobError || !jobData) {
-        setError("Failed to load job card: " + (jobError?.message || "Not found"));
+      const jobRes = await getJobById(id);
+      if (jobRes.error || !jobRes.data.job) {
+        setError("Failed to load job card: " + (jobRes.error || "Not found"));
         setLoading(false);
         return;
       }
 
-      setJob(jobData);
+      setJob(jobRes.data.job);
 
       // Fetch customers & devices for read-only selection reference
-      const { data: custData } = await supabase.from("customers").select("*");
-      setCustomers(custData || []);
+      const custRes = await getCustomers();
+      setCustomers(custRes.data);
 
-      const { data: devData } = await supabase.from("devices").select("*");
-      setAllDevices(devData || []);
+      const devRes = await getDevices();
+      setAllDevices(devRes.data);
 
       setLoading(false);
     }
 
     loadData();
-  }, [id, supabase]);
+  }, [id]);
 
   const handleUpdateJob = async (formData: RepairJobFormData) => {
     if (!id) return;
@@ -74,29 +65,10 @@ export default function EditJobPage() {
     setError(null);
 
     try {
-      const estimatedCost =
-        formData.estimated_cost !== "" && formData.estimated_cost !== undefined
-          ? Number(formData.estimated_cost)
-          : null;
+      const res = await updateJob(id, formData);
 
-      const finalCost =
-        formData.final_cost !== "" && formData.final_cost !== undefined
-          ? Number(formData.final_cost)
-          : null;
-
-      const { error: updateError } = await supabase
-        .from("repair_jobs")
-        .update({
-          customer_complaint: formData.customer_complaint.trim(),
-          priority: formData.priority,
-          estimated_cost: estimatedCost,
-          final_cost: finalCost,
-          expected_delivery_at: formData.expected_delivery_at || null,
-        })
-        .eq("id", id);
-
-      if (updateError) {
-        setError("Failed to update job card: " + updateError.message);
+      if (res.error) {
+        setError("Failed to update job card: " + res.error);
         setSubmitting(false);
         return;
       }

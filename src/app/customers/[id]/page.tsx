@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Customer } from "@/types/customer";
+import { Customer, getCustomerWithHistory } from "@/modules/customers";
 import { Device } from "@/types/device";
 import { RepairJob } from "@/types/job";
 import { AppShell } from "@/components/layout/AppShell";
@@ -36,47 +36,16 @@ export default function CustomerDetailPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) setUserEmail(user.email);
 
-      // Fetch customer
-      const { data: custData, error: fetchError } = await supabase
-        .from("customers")
-        .select("*")
-        .eq("id", id)
-        .single();
+      // Fetch customer profile & history via service
+      const result = await getCustomerWithHistory(id);
 
-      if (fetchError || !custData) {
-        setError("Customer not found or error loading data.");
-        setLoading(false);
-        return;
+      if (result.error || !result.customer) {
+        setError(result.error || "Customer not found or error loading data.");
+      } else {
+        setCustomer(result.customer);
+        setDevices(result.devices);
+        setJobs(result.jobs);
       }
-
-      setCustomer(custData);
-
-      // Fetch customer's registered devices
-      const { data: devData } = await supabase
-        .from("devices")
-        .select("*")
-        .eq("customer_id", id)
-        .order("created_at", { ascending: false });
-
-      setDevices(devData || []);
-
-      // Fetch customer's repair jobs
-      const { data: jobsData } = await supabase
-        .from("repair_jobs")
-        .select(`
-          *,
-          device:devices (
-            id,
-            device_code,
-            device_type,
-            brand,
-            model
-          )
-        `)
-        .eq("customer_id", id)
-        .order("created_at", { ascending: false });
-
-      setJobs(jobsData || []);
       setLoading(false);
     }
 

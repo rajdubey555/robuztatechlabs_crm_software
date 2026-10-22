@@ -4,10 +4,9 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { CustomerFormData } from "@/types/customer";
+import { CustomerFormData, createCustomer, CustomerForm } from "@/modules/customers";
 import { AppShell } from "@/components/layout/AppShell";
 import { Alert } from "@/components/ui";
-import { CustomerForm } from "@/components/customers/CustomerForm";
 
 export default function NewCustomerPage() {
   const [submitting, setSubmitting] = useState(false);
@@ -29,39 +28,20 @@ export default function NewCustomerPage() {
     setSubmitting(true);
     setError(null);
 
-    try {
-      const { data, error: insertError } = await supabase
-        .from("customers")
-        .insert([
-          {
-            full_name: formData.full_name.trim(),
-            phone: formData.phone.trim(),
-            alternate_phone: formData.alternate_phone?.trim() || null,
-            email: formData.email?.trim() || null,
-            address: formData.address?.trim() || null,
-            city: formData.city?.trim() || null,
-            notes: formData.notes?.trim() || null,
-          },
-        ])
-        .select()
-        .single();
+    const { data, error: insertError } = await createCustomer(formData);
 
-      if (insertError) {
-        setError("Failed to create customer: " + insertError.message);
-        setSubmitting(false);
-        return;
-      }
-
-      // Successful creation -> Redirect to Customer Detail page
-      if (data && data.id) {
-        router.push(`/customers/${data.id}`);
-        router.refresh();
-      } else {
-        router.push("/customers");
-      }
-    } catch {
-      setError("An unexpected error occurred. Please try again.");
+    if (insertError) {
+      setError("Failed to create customer: " + insertError);
       setSubmitting(false);
+      return;
+    }
+
+    // Successful creation -> Redirect to Customer Detail page
+    if (data && data.id) {
+      router.push(`/customers/${data.id}`);
+      router.refresh();
+    } else {
+      router.push("/customers");
     }
   };
 

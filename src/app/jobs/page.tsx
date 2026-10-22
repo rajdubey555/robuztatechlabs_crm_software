@@ -3,8 +3,8 @@
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { RepairJob } from "@/types/job";
-import { Employee } from "@/types/employee";
+import { RepairJob, getJobs } from "@/modules/jobs";
+import { Employee, getEmployees } from "@/modules/employees";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Alert, LoadingSpinner, EmptyState } from "@/components/ui";
 import { JobSearch } from "@/components/jobs/JobSearch";
@@ -29,69 +29,28 @@ export default function JobsListPage() {
 
   const [userEmail, setUserEmail] = useState<string | undefined>();
 
-  const supabase = createClient();
-
   useEffect(() => {
     async function loadData() {
       setLoading(true);
       setError(null);
 
       try {
-        // Get user
+        const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (user) setUserEmail(user.email);
 
         // Fetch active employees for dropdown filter
-        const { data: empData } = await supabase
-          .from("employees")
-          .select("*")
-          .order("full_name", { ascending: true });
-
-        if (empData) {
-          setEmployees(empData);
+        const empRes = await getEmployees();
+        if (empRes.data) {
+          setEmployees(empRes.data);
         }
 
         // Fetch repair jobs with customer, device, assigned employee & diagnoses
-        const { data, error: fetchError } = await supabase
-          .from("repair_jobs")
-          .select(`
-            *,
-            customer:customers (
-              id,
-              customer_code,
-              full_name,
-              phone
-            ),
-            device:devices (
-              id,
-              device_code,
-              device_type,
-              brand,
-              model,
-              serial_number,
-              imei
-            ),
-            assigned_employee:employees!repair_jobs_assigned_employee_id_fkey (
-              id,
-              employee_code,
-              full_name,
-              role,
-              specialization,
-              is_active
-            ),
-            diagnoses:diagnoses (
-              id,
-              diagnosis,
-              estimated_cost,
-              created_at
-            )
-          `)
-          .order("created_at", { ascending: false });
-
-        if (fetchError) {
-          throw fetchError;
+        const jobsRes = await getJobs();
+        if (jobsRes.error) {
+          throw new Error(jobsRes.error);
         } else {
-          setJobs(data || []);
+          setJobs(jobsRes.data);
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Failed to load repair jobs.";
@@ -102,7 +61,7 @@ export default function JobsListPage() {
     }
 
     loadData();
-  }, [supabase]);
+  }, []);
 
   // Employee dropdown options for JobSearch
   const employeeOptions = useMemo(() => {

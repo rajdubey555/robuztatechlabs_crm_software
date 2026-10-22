@@ -73,24 +73,19 @@ function IconRefresh({ className = "w-5 h-5" }: { className?: string }) {
     </svg>
   );
 }
-import { PartRequest, PartRequestStatus, PartRequestPriority } from "@/types/partRequest";
-import { Vendor } from "@/types/vendor";
+import { PartRequest, PartRequestStatus, PartRequestPriority, getPartRequests, getVendors, Vendor } from "@/modules/procurement";
 import { PartRequestList } from "./PartRequestList";
 import { CreatePartRequestModal } from "./CreatePartRequestModal";
-import { createClient } from "@/lib/supabase/client";
-
 import { CreateVendorModal } from "@/components/vendors/CreateVendorModal";
-
 import { AppShell } from "@/components/layout/AppShell";
+import { useBranchContext } from "@/context/BranchContext";
+import { BRANCHES, CATEGORIES } from "@/types/branch";
 
 interface PartRequestsPageClientProps {
   initialRequests?: PartRequest[];
   initialVendors?: Vendor[];
   userEmail?: string;
 }
-
-import { useBranchContext } from "@/context/BranchContext";
-import { BRANCHES, CATEGORIES } from "@/types/branch";
 
 export function PartRequestsPageClient({
   initialRequests = [],
@@ -109,35 +104,22 @@ export function PartRequestsPageClient({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isAddVendorModalOpen, setIsAddVendorOpen] = useState(false);
 
-  const supabase = createClient();
-
   // Fetch requests & vendors if missing or on refresh
   const fetchData = async () => {
     setLoading(true);
     try {
       // Fetch ALL Vendors
-      const { data: vendorData } = await supabase
-        .from("vendors")
-        .select("*")
-        .order("name", { ascending: true });
-
-      if (vendorData) {
-        setVendors(vendorData as Vendor[]);
+      const vendorRes = await getVendors();
+      if (vendorRes.data) {
+        setVendors(vendorRes.data);
       }
 
       // Fetch Part Requests
-      const { data: requestData, error: reqErr } = await supabase
-        .from("part_requests")
-        .select(`
-          *,
-          vendor:vendors(*)
-        `)
-        .order("created_at", { ascending: false });
-
-      if (reqErr) {
-        console.warn("Could not fetch part requests from Supabase:", reqErr.message || reqErr);
-      } else if (requestData) {
-        setRequests(requestData as PartRequest[]);
+      const reqRes = await getPartRequests();
+      if (reqRes.error) {
+        console.warn("Could not fetch part requests:", reqRes.error);
+      } else if (reqRes.data) {
+        setRequests(reqRes.data);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : JSON.stringify(err);
@@ -153,8 +135,8 @@ export function PartRequestsPageClient({
 
   // Filter requests (including Branch & Category context)
   const filteredRequests = requests.filter((req) => {
-    if (selectedBranch !== "all" && (req as unknown as { branch?: string }).branch && (req as unknown as { branch?: string }).branch !== selectedBranch) return false;
-    if (selectedCategory !== "all" && (req as unknown as { category_type?: string }).category_type && (req as unknown as { category_type?: string }).category_type !== selectedCategory) return false;
+    if (selectedBranch !== "all" && req.branch && req.branch !== selectedBranch) return false;
+    if (selectedCategory !== "all" && req.category_type && req.category_type !== selectedCategory) return false;
 
     const matchesSearch =
       req.part_name.toLowerCase().includes(searchQuery.toLowerCase()) ||

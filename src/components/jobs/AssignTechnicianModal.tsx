@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import { Modal, Button, Badge, Alert, LoadingSpinner, Input } from "@/components/ui";
 import { EmployeeRoleBadge } from "@/components/employees/EmployeeRoleBadge";
-import { Employee } from "@/types/employee";
-import { createClient } from "@/lib/supabase/client";
+import { Employee, getEmployeesWithWorkload } from "@/modules/employees";
+import { assignTechnician } from "@/modules/jobs";
 
 export interface AssignTechnicianModalProps {
   isOpen: boolean;
@@ -28,8 +28,6 @@ export function AssignTechnicianModal({
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const supabase = createClient();
-
   useEffect(() => {
     if (!isOpen) return;
 
@@ -38,49 +36,18 @@ export function AssignTechnicianModal({
       setError(null);
 
       try {
-        // Fetch active technicians or qualified staff
-        const { data: empData, error: empErr } = await supabase
-          .from("employees")
-          .select("*")
-          .eq("is_active", true)
-          .in("role", ["technician", "admin", "manager"])
-          .order("full_name", { ascending: true });
+        const res = await getEmployeesWithWorkload();
+        if (res.error) throw new Error(res.error);
 
-        if (empErr) throw empErr;
+        const techList = res.data.filter(
+          (e) => e.is_active && ["technician", "admin", "manager"].includes(e.role)
+        );
 
-        if (!empData || empData.length === 0) {
-          setTechnicians([]);
-          setLoading(false);
-          return;
-        }
-
-        // Fetch active workload count for each technician
-        const techIds = empData.map((e) => e.id);
-        const { data: activeJobsData, error: jobsErr } = await supabase
-          .from("repair_jobs")
-          .select("assigned_employee_id")
-          .in("assigned_employee_id", techIds)
-          .not("status", "in", '("delivered","closed","cancelled","unrepairable")');
-
-        if (jobsErr) throw jobsErr;
-
-        const countMap: Record<string, number> = {};
-        (activeJobsData || []).forEach((j) => {
-          if (j.assigned_employee_id) {
-            countMap[j.assigned_employee_id] = (countMap[j.assigned_employee_id] || 0) + 1;
-          }
-        });
-
-        const formatted = empData.map((e) => ({
-          ...e,
-          active_job_count: countMap[e.id] || 0,
-        }));
-
-        setTechnicians(formatted);
-        if (currentAssignedId && formatted.some((t) => t.id === currentAssignedId)) {
+        setTechnicians(techList);
+        if (currentAssignedId && techList.some((t) => t.id === currentAssignedId)) {
           setSelectedTechId(currentAssignedId);
-        } else if (formatted.length > 0) {
-          setSelectedTechId(formatted[0].id);
+        } else if (techList.length > 0) {
+          setSelectedTechId(techList[0].id);
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Failed to load technicians.";
@@ -91,7 +58,7 @@ export function AssignTechnicianModal({
     };
 
     fetchTechnicians();
-  }, [isOpen, jobId, currentAssignedId, supabase]);
+  }, [isOpen, jobId, currentAssignedId]);
 
   const handleAssign = async () => {
     if (!selectedTechId) {
@@ -108,43 +75,11 @@ export function AssignTechnicianModal({
     setError(null);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const res = await assignTechnician(jobId, selectedTechId, notes);
 
-      // 1. Mark existing active assignment as unassigned
-      const now = new Date().toISOString();
-      const { error: updateOldErr } = await supabase
-        .from("job_assignments")
-        .update({ unassigned_at: now })
-        .eq("repair_job_id", jobId)
-        .is("unassigned_at", null);
-
-      if (updateOldErr) {
-        console.warn("Could not unassign previous assignment:", updateOldErr);
+      if (res.error) {
+        throw new Error(res.error);
       }
-
-      // 2. Insert new job assignment record
-      const { error: insertErr } = await supabase
-        .from("job_assignments")
-        .insert({
-          repair_job_id: jobId,
-          employee_id: selectedTechId,
-          assigned_by: user?.id || null,
-          assigned_at: now,
-          notes: notes.trim() || null,
-        });
-
-      if (insertErr) throw insertErr;
-
-      // 3. Update current assigned_employee_id on repair job
-      const { error: updateJobErr } = await supabase
-        .from("repair_jobs")
-        .update({
-          assigned_employee_id: selectedTechId,
-          updated_at: now,
-        })
-        .eq("id", jobId);
-
-      if (updateJobErr) throw updateJobErr;
 
       onAssigned();
       onClose();

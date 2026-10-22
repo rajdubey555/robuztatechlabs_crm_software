@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect, FormEvent } from "react";
 import { Modal, Button, Input, Select, Alert } from "@/components/ui";
-import { createClient } from "@/lib/supabase/client";
-import { Vendor } from "@/types/vendor";
+import { Vendor, createVendor, updateVendor } from "@/modules/procurement";
 
 export interface VendorModalProps {
   isOpen: boolean;
@@ -27,7 +26,6 @@ export function VendorModal({
   vendorToEdit,
   onSuccess,
 }: VendorModalProps) {
-  const supabase = createClient();
   const isEditing = Boolean(vendorToEdit);
 
   const [submitting, setSubmitting] = useState(false);
@@ -101,33 +99,22 @@ export function VendorModal({
         is_active: isActive,
       };
 
-      let savedData: Vendor;
+      let savedData: Vendor | null = null;
 
       if (isEditing && vendorToEdit?.id) {
-        const { data, error: updateErr } = await supabase
-          .from("vendors")
-          .update(payload)
-          .eq("id", vendorToEdit.id)
-          .select()
-          .single();
-
-        if (updateErr) throw updateErr;
-        savedData = data as Vendor;
+        const res = await updateVendor(vendorToEdit.id, payload);
+        if (res.error) throw new Error(res.error);
+        savedData = { ...vendorToEdit, ...payload } as Vendor;
       } else {
-        const { data, error: insertErr } = await supabase
-          .from("vendors")
-          .insert(payload)
-          .select()
-          .single();
-
-        if (insertErr) throw insertErr;
-        savedData = data as Vendor;
+        const res = await createVendor(payload as Omit<Vendor, "id" | "created_at" | "updated_at">);
+        if (res.error || !res.data) throw new Error(res.error || "Failed to create vendor");
+        savedData = res.data;
       }
 
-      onSuccess(savedData);
+      onSuccess(savedData || undefined);
       onClose();
-    } catch (err: any) {
-      const msg = err?.message || "Failed to save vendor.";
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save vendor.";
       setError(msg);
     } finally {
       setSubmitting(false);

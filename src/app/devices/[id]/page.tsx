@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Device } from "@/types/device";
+import { Device, getDeviceWithHistory } from "@/modules/devices";
 import { RepairJob } from "@/types/job";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Card, CardHeader, CardTitle, CardContent, Badge, Alert, LoadingSpinner, EmptyState, Modal, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui";
@@ -35,38 +35,15 @@ export default function DeviceDetailPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) setUserEmail(user.email);
 
-      // Fetch device with customer and attachments
-      const { data: devData, error: fetchError } = await supabase
-        .from("devices")
-        .select(`
-          *,
-          customer:customers (
-            id,
-            customer_code,
-            full_name,
-            phone
-          ),
-          attachments:device_attachments (*)
-        `)
-        .eq("id", id)
-        .single();
+      // Fetch device and history via service
+      const result = await getDeviceWithHistory(id);
 
-      if (fetchError || !devData) {
-        setError("Device not found or error loading data.");
-        setLoading(false);
-        return;
+      if (result.error || !result.device) {
+        setError(result.error || "Device not found or error loading data.");
+      } else {
+        setDevice(result.device);
+        setJobs(result.jobs);
       }
-
-      setDevice(devData);
-
-      // Fetch repair jobs for this device
-      const { data: jobsData } = await supabase
-        .from("repair_jobs")
-        .select("*")
-        .eq("device_id", id)
-        .order("created_at", { ascending: false });
-
-      setJobs(jobsData || []);
       setLoading(false);
     }
 

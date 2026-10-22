@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button, Card, CardContent, Badge, Modal, EmptyState } from "@/components/ui";
-import { PartRequest, PartRequestStatus } from "@/types/partRequest";
+import { PartRequest, PartRequestStatus, updatePartRequestStatus } from "@/modules/procurement";
 import { RepairJob } from "@/types/job";
 import { Vendor } from "@/types/vendor";
 import { PartRequestStatusBadge, PartRequestPriorityBadge } from "./PartRequestStatusBadge";
@@ -13,7 +13,6 @@ import {
   buildWhatsAppClickUrl,
   MultiPartItem
 } from "@/services/whatsappService";
-import { createClient } from "@/lib/supabase/client";
 
 export interface PartRequestListProps {
   requests: PartRequest[];
@@ -30,7 +29,6 @@ export function PartRequestList({
   onRefresh,
   showJobDetails = false,
 }: PartRequestListProps) {
-  const supabase = createClient();
   const [items, setItems] = useState<PartRequest[]>(initialRequests);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
@@ -58,48 +56,6 @@ export function PartRequestList({
     }
   };
 
-  // Resilient status update helper with automatic legacy constraint fallback
-  const performStatusUpdate = async (ids: string[], newStatus: PartRequestStatus) => {
-    const updateData: Record<string, unknown> = {
-      status: newStatus,
-      updated_at: new Date().toISOString(),
-    };
-
-    if (newStatus === "ORDERED") {
-      updateData.ordered_at = new Date().toISOString();
-    } else if (newStatus === "RECEIVED") {
-      updateData.received_at = new Date().toISOString();
-    }
-
-    // Try primary uppercase status (e.g. "CANCELLED", "ORDERED", "RECEIVED")
-    let { error } = await supabase
-      .from("part_requests")
-      .update(updateData)
-      .in("id", ids);
-
-    // If legacy constraint error occurs, retry with lowercase status ("cancelled", "ordered", "received")
-    if (error && (error.message?.includes("part_requests_status_check") || error.code === "23514")) {
-      const fallbackMap: Record<string, string> = {
-        CANCELLED: "cancelled",
-        ORDERED: "ordered",
-        RECEIVED: "received",
-        PENDING: "requested",
-      };
-
-      const fallbackVal = fallbackMap[newStatus] || newStatus.toLowerCase();
-      const fallbackUpdateData = { ...updateData, status: fallbackVal };
-
-      const retryRes = await supabase
-        .from("part_requests")
-        .update(fallbackUpdateData)
-        .in("id", ids);
-
-      error = retryRes.error;
-    }
-
-    return error;
-  };
-
   // Single Item Status Update
   const handleStatusUpdate = async (requestId: string, newStatus: PartRequestStatus) => {
     setUpdatingId(requestId);
@@ -110,11 +66,11 @@ export function PartRequestList({
     );
 
     try {
-      const error = await performStatusUpdate([requestId], newStatus);
+      const res = await updatePartRequestStatus([requestId], newStatus);
 
-      if (error) {
-        console.error("Supabase status update error:", error);
-        alert("Failed to update status in database: " + (error.message || JSON.stringify(error)));
+      if (res.error) {
+        console.error("Status update error:", res.error);
+        alert("Failed to update status: " + res.error);
         onRefresh();
       } else {
         onRefresh();
@@ -140,11 +96,11 @@ export function PartRequestList({
     );
 
     try {
-      const error = await performStatusUpdate(selectedIds, newStatus);
+      const res = await updatePartRequestStatus(selectedIds, newStatus);
 
-      if (error) {
-        console.error("Bulk status update error:", error);
-        alert("Bulk update failed: " + (error.message || JSON.stringify(error)));
+      if (res.error) {
+        console.error("Bulk status update error:", res.error);
+        alert("Bulk update failed: " + res.error);
         onRefresh();
       } else {
         setSelectedIds([]);

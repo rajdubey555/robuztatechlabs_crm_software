@@ -4,10 +4,9 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Employee, EmployeeFormData } from "@/types/employee";
+import { Employee, EmployeeFormData, getEmployeeById, updateEmployee, EmployeeForm } from "@/modules/employees";
 import { AppShell } from "@/components/layout/AppShell";
 import { Alert, Button, LoadingSpinner, Badge } from "@/components/ui";
-import { EmployeeForm } from "@/components/employees/EmployeeForm";
 
 export default function EditEmployeePage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -33,13 +32,8 @@ export default function EditEmployeePage({ params }: { params: Promise<{ id: str
           setUserEmail(user.email);
         }
 
-        const { data, error: fetchErr } = await supabase
-          .from("employees")
-          .select("*")
-          .eq("id", employeeId)
-          .single();
-
-        if (fetchErr) throw fetchErr;
+        const { data, error: fetchErr } = await getEmployeeById(employeeId);
+        if (fetchErr || !data) throw new Error(fetchErr || "Employee not found.");
         setEmployee(data);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Failed to load employee details.";
@@ -56,44 +50,15 @@ export default function EditEmployeePage({ params }: { params: Promise<{ id: str
     setSubmitting(true);
     setError(null);
 
-    try {
-      const payload = {
-        full_name: formData.full_name.trim(),
-        display_name: formData.display_name?.trim() || null,
-        phone: formData.phone?.trim() || null,
-        alternate_phone: formData.alternate_phone?.trim() || null,
-        email: formData.email?.trim() || null,
-        id_number: formData.id_number?.trim() || null,
-        gender: formData.gender || null,
-        dob: formData.dob || null,
-        role: formData.role,
-        specialization: formData.specialization || null,
-        is_active: formData.is_active,
-        address_line: formData.address_line?.trim() || null,
-        region_state: formData.region_state?.trim() || null,
-        city_town: formData.city_town?.trim() || null,
-        postal_code: formData.postal_code?.trim() || null,
-        bank_account_name: formData.bank_account_name?.trim() || null,
-        bank_name: formData.bank_name?.trim() || null,
-        bank_branch: formData.bank_branch?.trim() || null,
-        bank_account_number: formData.bank_account_number?.trim() || null,
-        bank_ifsc: formData.bank_ifsc?.trim() || null,
-        updated_at: new Date().toISOString(),
-      };
+    const { success, error: updateError } = await updateEmployee(employeeId, formData);
 
-      const { error: updateError } = await supabase
-        .from("employees")
-        .update(payload)
-        .eq("id", employeeId);
-
-      if (updateError) throw updateError;
-
-      router.push(`/employees/${employeeId}`);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to update employee.";
-      setError(message);
+    if (!success || updateError) {
+      setError(updateError || "Failed to update employee.");
       setSubmitting(false);
+      return;
     }
+
+    router.push(`/employees/${employeeId}`);
   };
 
   if (loading) {

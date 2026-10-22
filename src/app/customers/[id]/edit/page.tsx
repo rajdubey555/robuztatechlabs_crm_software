@@ -4,10 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Customer, CustomerFormData } from "@/types/customer";
+import { Customer, CustomerFormData, getCustomerById, updateCustomer, CustomerForm } from "@/modules/customers";
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge, Alert, LoadingSpinner } from "@/components/ui";
-import { CustomerForm } from "@/components/customers/CustomerForm";
 
 export default function EditCustomerPage() {
   const params = useParams();
@@ -32,15 +31,11 @@ export default function EditCustomerPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) setUserEmail(user.email);
 
-      // Fetch customer
-      const { data, error: fetchError } = await supabase
-        .from("customers")
-        .select("*")
-        .eq("id", id)
-        .single();
+      // Fetch customer via service
+      const { data, error: fetchError } = await getCustomerById(id);
 
-      if (fetchError) {
-        setError("Failed to load customer: " + fetchError.message);
+      if (fetchError || !data) {
+        setError(fetchError || "Failed to load customer profile.");
       } else {
         setCustomer(data);
       }
@@ -55,33 +50,17 @@ export default function EditCustomerPage() {
     setSubmitting(true);
     setError(null);
 
-    try {
-      const { error: updateError } = await supabase
-        .from("customers")
-        .update({
-          full_name: formData.full_name.trim(),
-          phone: formData.phone.trim(),
-          alternate_phone: formData.alternate_phone?.trim() || null,
-          email: formData.email?.trim() || null,
-          address: formData.address?.trim() || null,
-          city: formData.city?.trim() || null,
-          notes: formData.notes?.trim() || null,
-        })
-        .eq("id", id);
+    const { success, error: updateError } = await updateCustomer(id, formData);
 
-      if (updateError) {
-        setError("Failed to update customer: " + updateError.message);
-        setSubmitting(false);
-        return;
-      }
-
-      // Successful update -> redirect to customer detail page
-      router.push(`/customers/${id}`);
-      router.refresh();
-    } catch {
-      setError("An unexpected error occurred. Please try again.");
+    if (!success || updateError) {
+      setError(updateError || "Failed to update customer.");
       setSubmitting(false);
+      return;
     }
+
+    // Successful update -> redirect to customer detail page
+    router.push(`/customers/${id}`);
+    router.refresh();
   };
 
   return (

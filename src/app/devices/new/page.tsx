@@ -4,12 +4,10 @@ import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { DeviceFormData } from "@/types/device";
-import { Customer } from "@/types/customer";
+import { DeviceFormData, createDevice, DeviceForm } from "@/modules/devices";
+import { Customer, getCustomers } from "@/modules/customers";
 import { AppShell } from "@/components/layout/AppShell";
 import { Alert, LoadingSpinner, EmptyState, Button } from "@/components/ui";
-import { DeviceForm } from "@/components/devices/DeviceForm";
-import { convertToWebP } from "@/lib/image-utils";
 
 function NewDeviceContent() {
   const router = useRouter();
@@ -33,16 +31,13 @@ function NewDeviceContent() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) setUserEmail(user.email);
 
-      // Fetch customers for selection
-      const { data, error: fetchError } = await supabase
-        .from("customers")
-        .select("*")
-        .order("full_name", { ascending: true });
+      // Fetch customers via customerService
+      const { data, error: fetchError } = await getCustomers();
 
       if (fetchError) {
-        setError("Failed to load customers: " + fetchError.message);
+        setError("Failed to load customers: " + fetchError);
       } else {
-        setCustomers(data || []);
+        setCustomers(data);
       }
       setLoading(false);
     }
@@ -54,80 +49,17 @@ function NewDeviceContent() {
     setSubmitting(true);
     setError(null);
 
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
+    const { data: device, error: insertError } = await createDevice(formData, photos);
 
-      // 1. Insert device record
-      const { data: device, error: insertError } = await supabase
-        .from("devices")
-        .insert([
-          {
-            customer_id: formData.customer_id,
-            device_type: formData.device_type,
-            brand: formData.brand.trim(),
-            model: formData.model.trim(),
-            serial_number: formData.serial_number?.trim() || null,
-            imei: formData.imei?.trim() || null,
-            color: formData.color?.trim() || null,
-            ram: formData.ram?.trim() || null,
-            storage: formData.storage?.trim() || null,
-            operating_system: formData.operating_system?.trim() || null,
-            password_note: formData.password_note?.trim() || null,
-            accessories: formData.accessories?.trim() || null,
-            physical_condition: formData.physical_condition?.trim() || null,
-          },
-        ])
-        .select()
-        .single();
-
-      if (insertError || !device) {
-        setError("Failed to register device: " + (insertError?.message || "Unknown error"));
-        setSubmitting(false);
-        return;
-      }
-
-      // 2. Upload intake photos as compressed WebP images to Supabase Storage
-      if (photos.length > 0 && device.id) {
-        for (const file of photos) {
-          // Client-side convert to WebP
-          const webpFile = await convertToWebP(file);
-
-          const fileName = `${device.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.webp`;
-
-          const { error: uploadError } = await supabase.storage
-            .from("device-attachments")
-            .upload(fileName, webpFile, {
-              contentType: "image/webp",
-              upsert: true,
-            });
-
-          if (!uploadError) {
-            const { data: publicUrlData } = supabase.storage
-              .from("device-attachments")
-              .getPublicUrl(fileName);
-
-            const fileUrl = publicUrlData.publicUrl;
-
-            await supabase.from("device_attachments").insert([
-              {
-                device_id: device.id,
-                file_url: fileUrl,
-                file_name: webpFile.name,
-                file_type: "image/webp",
-                uploaded_by: user?.id || null,
-              },
-            ]);
-          }
-        }
-      }
-
-      // 3. Successful creation -> redirect to Device Detail page
-      router.push(`/devices/${device.id}`);
-      router.refresh();
-    } catch {
-      setError("An unexpected error occurred. Please try again.");
+    if (insertError || !device) {
+      setError(insertError || "Failed to register device.");
       setSubmitting(false);
+      return;
     }
+
+    // Redirect to Device Detail page
+    router.push(`/devices/${device.id}`);
+    router.refresh();
   };
 
   return (

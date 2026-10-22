@@ -3,11 +3,9 @@
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Customer } from "@/types/customer";
+import { Customer, getCustomers, CustomerSearch, CustomerTable } from "@/modules/customers";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Alert, LoadingSpinner, EmptyState } from "@/components/ui";
-import { CustomerSearch } from "@/components/customers/CustomerSearch";
-import { CustomerTable } from "@/components/customers/CustomerTable";
 import { useBranchContext } from "@/context/BranchContext";
 
 export default function CustomersListPage() {
@@ -26,22 +24,18 @@ export default function CustomersListPage() {
       setLoading(true);
       setError(null);
 
-      // Get user info for Navbar
+      // Get user info for Topbar/Sidebar
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setUserEmail(user.email);
       }
 
-      // Fetch customers ordered by created_at DESC
-      const { data, error: fetchError } = await supabase
-        .from("customers")
-        .select("*")
-        .order("created_at", { ascending: false });
-
+      // Fetch customers via customerService
+      const { data, error: fetchError } = await getCustomers();
       if (fetchError) {
-        setError("Failed to load customers: " + fetchError.message);
+        setError("Failed to load customers: " + fetchError);
       } else {
-        setCustomers(data || []);
+        setCustomers(data);
       }
       setLoading(false);
     }

@@ -27,6 +27,7 @@ export interface Employee {
   dob?: string | null;
   role: EmployeeRole;
   specialization?: EmployeeSpecialization | null;
+  branch?: "south_bopal" | "tragad" | "both" | null;
   is_active: boolean;
   address_line?: string | null;
   region_state?: string | null;
@@ -55,6 +56,7 @@ export interface EmployeeFormData {
   dob?: string;
   role: EmployeeRole;
   specialization?: EmployeeSpecialization;
+  branch?: "south_bopal" | "tragad" | "both";
   is_active: boolean;
   address_line?: string;
   region_state?: string;
