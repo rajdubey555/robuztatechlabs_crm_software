@@ -7,6 +7,7 @@ export type EmployeeRole =
   | "accountant";
 
 export type EmployeeSpecialization =
+  | "drone"
   | "laptop"
   | "mobile"
   | "apple"
@@ -28,6 +29,7 @@ export interface Employee {
   role: EmployeeRole;
   specialization?: EmployeeSpecialization | null;
   branch?: "south_bopal" | "tragad" | "both" | null;
+  category_type?: "drone" | "laptop_general" | "both" | null;
   is_active: boolean;
   address_line?: string | null;
   region_state?: string | null;
@@ -57,6 +59,7 @@ export interface EmployeeFormData {
   role: EmployeeRole;
   specialization?: EmployeeSpecialization;
   branch?: "south_bopal" | "tragad" | "both";
+  category_type?: "drone" | "laptop_general" | "both";
   is_active: boolean;
   address_line?: string;
   region_state?: string;

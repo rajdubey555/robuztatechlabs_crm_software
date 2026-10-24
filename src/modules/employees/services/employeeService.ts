@@ -160,7 +160,8 @@ export async function createEmployee(
       dob: formData.dob || null,
       role: formData.role,
       specialization: formData.specialization || null,
-      branch: formData.branch || null,
+      branch: formData.branch || "south_bopal",
+      category_type: formData.category_type || (formData.specialization === "drone" ? "drone" : "laptop_general"),
       is_active: formData.is_active,
       address_line: formData.address_line?.trim() || null,
       region_state: formData.region_state?.trim() || null,
@@ -209,7 +210,8 @@ export async function updateEmployee(
     if (formData.dob !== undefined) payload.dob = formData.dob || null;
     if (formData.role !== undefined) payload.role = formData.role;
     if (formData.specialization !== undefined) payload.specialization = formData.specialization || null;
-    if (formData.branch !== undefined) payload.branch = formData.branch || null;
+    if (formData.branch !== undefined) payload.branch = formData.branch || "south_bopal";
+    if (formData.category_type !== undefined) payload.category_type = formData.category_type;
     if (formData.is_active !== undefined) payload.is_active = formData.is_active;
     if (formData.address_line !== undefined) payload.address_line = formData.address_line?.trim() || null;
     if (formData.region_state !== undefined) payload.region_state = formData.region_state?.trim() || null;

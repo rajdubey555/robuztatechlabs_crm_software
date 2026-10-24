@@ -7,6 +7,10 @@ export type JobStatus =
   | "received"
   | "diagnosis_pending"
   | "diagnosed"
+  | "waiting_parts"
+  | "in_progress"
+  | "ready_for_delivery"
+  | "delivered"
   | "cancelled"
   | "unrepairable";
 
@@ -35,6 +39,8 @@ export interface RepairJob {
     customer_code: string;
     full_name: string;
     phone: string;
+    email?: string | null;
+    alternate_phone?: string | null;
   };
   device?: {
     id: string;

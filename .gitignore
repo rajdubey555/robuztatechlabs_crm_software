@@ -48,3 +48,4 @@ Thumbs.db
 .gemini/
 scratch/
 tmp/
+supabase/.temp/

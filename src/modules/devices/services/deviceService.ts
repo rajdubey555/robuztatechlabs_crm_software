@@ -190,7 +190,7 @@ export async function createDevice(
                 file_url: publicUrlData.publicUrl,
                 file_name: photo.name,
                 file_type: "image/webp",
-                uploaded_by: user?.email || null,
+                uploaded_by: user?.id || null,
               },
             ]);
           }
@@ -246,3 +246,44 @@ export async function updateDevice(
     return { success: false, error: msg };
   }
 }
+
+/**
+ * Delete a device attachment photo from both Supabase Storage bucket and the database
+ */
+export async function deleteDeviceAttachment(
+  attachmentId: string,
+  fileUrl?: string
+): Promise<{ success: boolean; error: string | null }> {
+  const supabase = createClient();
+  try {
+    // 1. Delete physical file from Supabase Storage if file_url provided
+    if (fileUrl) {
+      try {
+        const marker = "/device-attachments/";
+        const idx = fileUrl.indexOf(marker);
+        if (idx !== -1) {
+          const storagePath = decodeURIComponent(fileUrl.substring(idx + marker.length));
+          await supabase.storage.from("device-attachments").remove([storagePath]);
+        }
+      } catch (storageErr) {
+        console.warn("Could not delete from storage bucket:", storageErr);
+      }
+    }
+
+    // 2. Delete database record from device_attachments table
+    const { error: dbError } = await supabase
+      .from("device_attachments")
+      .delete()
+      .eq("id", attachmentId);
+
+    if (dbError) {
+      return { success: false, error: dbError.message };
+    }
+
+    return { success: true, error: null };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Failed to delete attachment.";
+    return { success: false, error: msg };
+  }
+}
+

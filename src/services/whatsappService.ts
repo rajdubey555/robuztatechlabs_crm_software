@@ -172,3 +172,111 @@ export async function sendWhatsAppPartRequest(
     waUrl,
   };
 }
+
+/**
+ * Builds formatted WhatsApp message to send diagnostic assessment & cost estimate to the customer.
+ */
+export function buildCustomerQuotationWhatsAppMessage(params: {
+  customer_name: string;
+  job_code: string;
+  device_brand?: string;
+  device_model?: string;
+  diagnosis: string;
+  recommended_action?: string | null;
+  estimated_cost?: number | null;
+  branch_name?: string;
+  notes?: string | null;
+}): string {
+  const device = [params.device_brand, params.device_model].filter(Boolean).join(" ") || "Your Device";
+  const costFormatted = params.estimated_cost
+    ? `₹${Number(params.estimated_cost).toLocaleString("en-IN")}`
+    : "To be confirmed";
+
+  let message = `📋 *ROBUZTA SERVICE CENTER - REPAIR ESTIMATE*\n`;
+  message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+  message += `Dear *${params.customer_name}*,\n`;
+  message += `Your device technical inspection has been completed.\n\n`;
+
+  message += `*Job Summary:*\n`;
+  message += `• *Job Card No:* #${params.job_code}\n`;
+  message += `• *Device:* ${device}\n`;
+  if (params.branch_name) {
+    message += `• *Branch:* ${params.branch_name}\n`;
+  }
+  message += `\n`;
+
+  message += `*Diagnostic Assessment:*\n`;
+  message += `• *Issue Detected:* ${params.diagnosis}\n`;
+  if (params.recommended_action) {
+    message += `• *Recommended Repair:* ${params.recommended_action}\n`;
+  }
+  message += `• *Estimated Cost:* *${costFormatted}*\n\n`;
+
+  if (params.notes && params.notes.trim()) {
+    message += `*Technical Notes:*\n${params.notes.trim()}\n\n`;
+  }
+
+  message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  message += `*APPROVAL REQUIRED TO PROCEED*\n`;
+  message += `Please reply directly to this message:\n`;
+  message += `👉 Reply *APPROVED* to confirm and start repair.\n`;
+  message += `👉 Reply *DECLINED* if you do not want to proceed.\n\n`;
+  message += `_Robuzta Customer Support Team_`;
+
+  return message;
+}
+
+/**
+ * Builds prefilled mailto URL and clean formatted text for sending diagnosis quotation via Email.
+ */
+export function buildCustomerQuotationEmail(params: {
+  customer_email?: string | null;
+  customer_name: string;
+  job_code: string;
+  device_brand?: string;
+  device_model?: string;
+  diagnosis: string;
+  recommended_action?: string | null;
+  estimated_cost?: number | null;
+  branch_name?: string;
+  notes?: string | null;
+}): { mailtoUrl: string; subject: string; body: string } {
+  const device = [params.device_brand, params.device_model].filter(Boolean).join(" ") || "Your Device";
+  const costFormatted = params.estimated_cost
+    ? `₹${Number(params.estimated_cost).toLocaleString("en-IN")}`
+    : "To be confirmed";
+
+  const subject = `Repair Estimate & Diagnostic Report: ${device} [Job #${params.job_code}] - Robuzta`;
+
+  let body = `Dear ${params.customer_name},\n\n`;
+  body += `Thank you for choosing Robuzta Service Center. Our certified technicians have completed the technical inspection for your device.\n\n`;
+  body += `==================================================\n`;
+  body += `JOB DETAILS\n`;
+  body += `==================================================\n`;
+  body += `Job Card ID: #${params.job_code}\n`;
+  body += `Device: ${device}\n`;
+  if (params.branch_name) body += `Branch: ${params.branch_name}\n`;
+  body += `\n`;
+  body += `==================================================\n`;
+  body += `DIAGNOSTIC REPORT & COST ESTIMATE\n`;
+  body += `==================================================\n`;
+  body += `Issue Detected: ${params.diagnosis}\n`;
+  if (params.recommended_action) body += `Recommended Action: ${params.recommended_action}\n`;
+  body += `Estimated Cost: ${costFormatted}\n`;
+  if (params.notes && params.notes.trim()) body += `Technical Notes: ${params.notes.trim()}\n`;
+  body += `\n`;
+  body += `==================================================\n`;
+  body += `APPROVAL REQUIRED\n`;
+  body += `==================================================\n`;
+  body += `To authorize our technicians to start repairing your device, please reply to this email with:\n`;
+  body += `- "APPROVED" to confirm repair\n`;
+  body += `- "DECLINED" to cancel and collect device\n\n`;
+  body += `Warm regards,\n`;
+  body += `Robuzta Service Team\n`;
+
+  const to = params.customer_email || "";
+  const mailtoUrl = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+  return { mailtoUrl, subject, body };
+}
+

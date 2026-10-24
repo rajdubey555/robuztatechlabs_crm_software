@@ -41,10 +41,11 @@ export function EmployeeSearch({
 
   const specOptions = [
     { label: "All Specializations", value: "" },
-    { label: "Laptop", value: "laptop" },
-    { label: "Mobile", value: "mobile" },
+    { label: "Drone (Gimbal / FC / Motors)", value: "drone" },
+    { label: "Laptop Specialist", value: "laptop" },
+    { label: "Mobile Specialist", value: "mobile" },
     { label: "Apple Devices", value: "apple" },
-    { label: "Hardware Repair", value: "hardware" },
+    { label: "Hardware & Chip-level", value: "hardware" },
     { label: "Software & OS", value: "software" },
     { label: "General", value: "general" },
   ];

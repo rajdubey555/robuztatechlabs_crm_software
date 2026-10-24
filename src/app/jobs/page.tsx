@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { RepairJob, getJobs } from "@/modules/jobs";
@@ -10,9 +10,17 @@ import { Button, Alert, LoadingSpinner, EmptyState } from "@/components/ui";
 import { JobSearch } from "@/components/jobs/JobSearch";
 import { JobTable } from "@/components/jobs/JobTable";
 import { useBranchContext } from "@/context/BranchContext";
+import {
+  Wrench,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  Plus,
+  RotateCcw,
+} from "lucide-react";
 
 export default function JobsListPage() {
-  const { selectedBranch, selectedCategory, activeBranchInfo, activeCategoryInfo, isFiltered, clearFilters } = useBranchContext();
+  const { selectedBranch, selectedCategory, isFiltered, clearFilters } = useBranchContext();
 
   const [jobs, setJobs] = useState<RepairJob[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -29,39 +37,39 @@ export default function JobsListPage() {
 
   const [userEmail, setUserEmail] = useState<string | undefined>();
 
-  useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      setError(null);
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
 
-      try {
-        const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) setUserEmail(user.email);
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setUserEmail(user.email);
 
-        // Fetch active employees for dropdown filter
-        const empRes = await getEmployees();
-        if (empRes.data) {
-          setEmployees(empRes.data);
-        }
-
-        // Fetch repair jobs with customer, device, assigned employee & diagnoses
-        const jobsRes = await getJobs();
-        if (jobsRes.error) {
-          throw new Error(jobsRes.error);
-        } else {
-          setJobs(jobsRes.data);
-        }
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Failed to load repair jobs.";
-        setError(message);
-      } finally {
-        setLoading(false);
+      // Fetch active employees for dropdown filter
+      const empRes = await getEmployees();
+      if (empRes.data) {
+        setEmployees(empRes.data);
       }
-    }
 
-    loadData();
+      // Fetch repair jobs with customer, device, assigned employee & diagnoses
+      const jobsRes = await getJobs();
+      if (jobsRes.error) {
+        throw new Error(jobsRes.error);
+      } else {
+        setJobs(jobsRes.data);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load repair jobs.";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Employee dropdown options for JobSearch
   const employeeOptions = useMemo(() => {
@@ -71,13 +79,13 @@ export default function JobsListPage() {
     }));
   }, [employees]);
 
-  // Search & Filter logic (Including Branch & Category context)
+  // Search & Filter logic (Including Branch & Category context from Topbar)
   const filteredJobs = useMemo(() => {
     return jobs.filter((j) => {
-      // Branch Context Filter
+      // Branch Context Filter (from Topbar)
       if (selectedBranch !== "all" && j.branch && j.branch !== selectedBranch) return false;
 
-      // Category Context Filter
+      // Category Context Filter (from Topbar)
       if (selectedCategory !== "all" && j.category_type && j.category_type !== selectedCategory) return false;
 
       // 1. Status Filter
@@ -130,6 +138,33 @@ export default function JobsListPage() {
     });
   }, [jobs, selectedBranch, selectedCategory, searchQuery, statusFilter, priorityFilter, assignmentFilter, employeeFilter, diagnosisFilter]);
 
+  // Operational metrics for the current branch view
+  const branchJobs = useMemo(() => {
+    return jobs.filter((j) => {
+      if (selectedBranch !== "all" && j.branch && j.branch !== selectedBranch) return false;
+      if (selectedCategory !== "all" && j.category_type && j.category_type !== selectedCategory) return false;
+      return true;
+    });
+  }, [jobs, selectedBranch, selectedCategory]);
+
+  const activeJobsCount = useMemo(() => {
+    return branchJobs.filter(
+      (j) => !["delivered", "cancelled", "unrepairable"].includes(j.status?.toLowerCase() || "")
+    ).length;
+  }, [branchJobs]);
+
+  const pendingDiagnosisCount = useMemo(() => {
+    return branchJobs.filter((j) => ["received", "diagnosis_pending"].includes(j.status?.toLowerCase() || "")).length;
+  }, [branchJobs]);
+
+  const readyForRepairCount = useMemo(() => {
+    return branchJobs.filter((j) => ["diagnosed", "in_progress", "waiting_parts"].includes(j.status?.toLowerCase() || "")).length;
+  }, [branchJobs]);
+
+  const unassignedCount = useMemo(() => {
+    return branchJobs.filter((j) => !j.assigned_employee_id && !["delivered", "cancelled", "unrepairable"].includes(j.status?.toLowerCase() || "")).length;
+  }, [branchJobs]);
+
   const hasActiveFilters = Boolean(
     searchQuery || statusFilter || priorityFilter || assignmentFilter || employeeFilter || diagnosisFilter || isFiltered
   );
@@ -146,92 +181,159 @@ export default function JobsListPage() {
 
   return (
     <AppShell userEmail={userEmail}>
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Repair Jobs
-            </h1>
-            {activeBranchInfo && (
-              <span className={`px-3 py-1 rounded-full text-xs font-bold border ${activeBranchInfo.badgeColor}`}>
-                📍 {activeBranchInfo.shortName}
-              </span>
-            )}
-            {activeCategoryInfo && (
-              <span className={`px-3 py-1 rounded-full text-xs font-bold border ${activeCategoryInfo.badgeColor}`}>
-                {activeCategoryInfo.icon} {activeCategoryInfo.name}
-              </span>
-            )}
+      <div className="space-y-5 w-full">
+        {/* Header Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 flex items-center justify-center text-[#009688]">
+              <Wrench className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h1 className="font-sans text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                  Repair Jobs
+                </h1>
+                <span className="text-xs font-mono font-medium px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                  {filteredJobs.length} {filteredJobs.length === 1 ? "job" : "jobs"}
+                </span>
+              </div>
+            </div>
           </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Track job cards, diagnoses, technician assignments, complaints, and repair intake statuses
-          </p>
-        </div>
 
-        <Link href="/jobs/new">
-          <Button variant="primary" size="md">
-            <svg className="h-5 w-5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Create Job Card
-          </Button>
-        </Link>
-      </div>
-
-      {error && (
-        <Alert variant="error" onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {/* Search & Filter */}
-      <JobSearch
-        searchTerm={searchQuery}
-        onSearchChange={setSearchQuery}
-        selectedStatus={statusFilter}
-        onStatusChange={setStatusFilter}
-        selectedPriority={priorityFilter}
-        onPriorityChange={setPriorityFilter}
-        assignmentFilter={assignmentFilter}
-        onAssignmentFilterChange={setAssignmentFilter}
-        employeeFilter={employeeFilter}
-        onEmployeeFilterChange={setEmployeeFilter}
-        diagnosisFilter={diagnosisFilter}
-        onDiagnosisFilterChange={setDiagnosisFilter}
-        employeeOptions={employeeOptions}
-      />
-
-      {/* Content */}
-      {loading ? (
-        <div className="flex justify-center items-center py-20">
-          <LoadingSpinner size="lg" className="text-[#009688]" />
-        </div>
-      ) : filteredJobs.length > 0 ? (
-        <JobTable jobs={filteredJobs} />
-      ) : hasActiveFilters ? (
-        <EmptyState
-          title="No matching repair jobs found"
-          description="No repair jobs match your current search, branch, or category filter criteria."
-          action={
-            <Button variant="outline" size="sm" onClick={resetFilters}>
-              Clear All Filters
+          <Link href="/jobs/new">
+            <Button variant="primary" size="md" className="font-medium shadow-xs">
+              <Plus className="w-4 h-4 mr-1.5" />
+              Create Job Card
             </Button>
-          }
+          </Link>
+        </div>
+
+        {error && (
+          <Alert variant="error" onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
+
+        {/* Minimal High-Density Operational Counters */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="p-3 sm:p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex items-center justify-between">
+            <div>
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                Active Jobs
+              </span>
+              <span className="text-xl font-bold font-sans tracking-tight text-slate-900 dark:text-white mt-0.5 block">
+                {activeJobsCount}
+              </span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-teal-50 dark:bg-teal-950/40 text-[#009688] flex items-center justify-center shrink-0">
+              <Wrench className="w-4 h-4" />
+            </div>
+          </div>
+
+          <div className="p-3 sm:p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex items-center justify-between">
+            <div>
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                Pending Assessment
+              </span>
+              <span className="text-xl font-bold font-sans tracking-tight text-amber-600 dark:text-amber-400 mt-0.5 block">
+                {pendingDiagnosisCount}
+              </span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-500 flex items-center justify-center shrink-0">
+              <Clock className="w-4 h-4" />
+            </div>
+          </div>
+
+          <div className="p-3 sm:p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex items-center justify-between">
+            <div>
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                Ready for Repair
+              </span>
+              <span className="text-xl font-bold font-sans tracking-tight text-emerald-600 dark:text-emerald-400 mt-0.5 block">
+                {readyForRepairCount}
+              </span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-500 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+          </div>
+
+          <div className="p-3 sm:p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex items-center justify-between">
+            <div>
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                Unassigned Tech
+              </span>
+              <span className="text-xl font-bold font-sans tracking-tight text-slate-900 dark:text-white mt-0.5 block">
+                {unassignedCount}
+              </span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center shrink-0">
+              <AlertCircle className="w-4 h-4" />
+            </div>
+          </div>
+        </div>
+
+        {/* Search & Filter Bar */}
+        <JobSearch
+          searchTerm={searchQuery}
+          onSearchChange={setSearchQuery}
+          selectedStatus={statusFilter}
+          onStatusChange={setStatusFilter}
+          selectedPriority={priorityFilter}
+          onPriorityChange={setPriorityFilter}
+          assignmentFilter={assignmentFilter}
+          onAssignmentFilterChange={setAssignmentFilter}
+          employeeFilter={employeeFilter}
+          onEmployeeFilterChange={setEmployeeFilter}
+          diagnosisFilter={diagnosisFilter}
+          onDiagnosisFilterChange={setDiagnosisFilter}
+          employeeOptions={employeeOptions}
+          onResetFilters={resetFilters}
         />
-      ) : (
-        <EmptyState
-          title="No repair jobs created yet"
-          description="Create your first repair job card to start tracking device repairs."
-          action={
+
+        {/* Content Table or Empty States */}
+        {loading ? (
+          <div className="flex justify-center items-center py-24">
+            <LoadingSpinner size="lg" className="text-[#009688]" />
+          </div>
+        ) : filteredJobs.length > 0 ? (
+          <JobTable jobs={filteredJobs} onJobDeleted={loadData} />
+        ) : hasActiveFilters ? (
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-12 text-center space-y-3">
+            <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+              <Wrench className="w-5 h-5" />
+            </div>
+            <h3 className="font-sans text-base font-semibold text-slate-900 dark:text-white">
+              No matching repair jobs found
+            </h3>
+            <p className="text-xs text-slate-500">
+              No repair tickets match your search or filter criteria.
+            </p>
+            <Button variant="outline" size="sm" onClick={resetFilters} className="mt-2 text-xs font-medium">
+              <RotateCcw className="w-3.5 h-3.5 mr-1" />
+              Reset All Filters
+            </Button>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-12 text-center space-y-3">
+            <div className="w-12 h-12 rounded-full bg-teal-50 dark:bg-teal-950/60 text-[#009688] flex items-center justify-center mx-auto">
+              <Wrench className="w-6 h-6" />
+            </div>
+            <h3 className="font-sans text-base font-semibold text-slate-900 dark:text-white">
+              No repair jobs created yet
+            </h3>
+            <p className="text-xs text-slate-500">
+              Create your first repair job card to start tracking diagnostics and service.
+            </p>
             <Link href="/jobs/new">
-              <Button variant="primary" size="sm">
-                + Create First Job Card
+              <Button variant="primary" size="sm" className="mt-2 text-xs font-medium">
+                <Plus className="w-3.5 h-3.5 mr-1" />
+                Create First Job Card
               </Button>
             </Link>
-          }
-        />
-      )}
+          </div>
+        )}
+      </div>
     </AppShell>
   );
 }

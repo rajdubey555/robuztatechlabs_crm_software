@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect, FormEvent, ChangeEvent } from "react";
-import { DeviceFormData, DeviceFormErrors, DeviceType } from "@/types/device";
+import { useState, useEffect, useMemo, FormEvent, ChangeEvent } from "react";
+import { Loader2, Sparkles, Smartphone, Upload, Camera, Trash2, ImageIcon, ZoomIn, Eye } from "lucide-react";
+import { DeviceFormData, DeviceFormErrors, DeviceType, DeviceAttachment } from "@/types/device";
 import { Customer } from "@/types/customer";
 import { Input, Select, Button, Card, CardContent, Modal } from "@/components/ui";
+import { MobileUploadCompanionModal } from "./MobileUploadCompanionModal";
 import {
   CatalogItem,
   fetchDeviceCatalog,
@@ -14,6 +16,8 @@ import {
 export interface DeviceFormProps {
   customers: Customer[];
   initialData?: DeviceFormData;
+  existingAttachments?: DeviceAttachment[];
+  onDeleteAttachment?: (attachmentId: string, fileUrl?: string) => Promise<void>;
   onSubmit: (data: DeviceFormData, photos: File[]) => Promise<void>;
   isLoading?: boolean;
   submitButtonText?: string;
@@ -33,6 +37,8 @@ const DEFAULT_DEVICE_TYPES: DeviceType[] = [
 export function DeviceForm({
   customers,
   initialData,
+  existingAttachments,
+  onDeleteAttachment,
   onSubmit,
   isLoading = false,
   submitButtonText = "Save Device",
@@ -56,8 +62,32 @@ export function DeviceForm({
 
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+  const [existingPhotos, setExistingPhotos] = useState<DeviceAttachment[]>(existingAttachments || []);
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null);
+  const [activeLightboxUrl, setActiveLightboxUrl] = useState<string | null>(null);
   const [errors, setErrors] = useState<DeviceFormErrors>({});
   const [isCustomModel, setIsCustomModel] = useState(false);
+
+  useEffect(() => {
+    if (existingAttachments) {
+      setExistingPhotos(existingAttachments);
+    }
+  }, [existingAttachments]);
+
+  const handleDeleteExistingPhoto = async (id: string, fileUrl?: string) => {
+    if (!onDeleteAttachment) return;
+    setDeletingAttachmentId(id);
+    try {
+      await onDeleteAttachment(id, fileUrl);
+      setExistingPhotos((prev) => prev.filter((item) => item.id !== id));
+    } finally {
+      setDeletingAttachmentId(null);
+    }
+  };
+
+  // Live External API Auto-Fetch State
+  const [liveApiModels, setLiveApiModels] = useState<string[]>([]);
+  const [loadingApiModels, setLoadingApiModels] = useState(false);
 
   // Catalog State
   const [catalog, setCatalog] = useState<CatalogItem[]>(DEFAULT_CATALOG);
@@ -74,6 +104,7 @@ export function DeviceForm({
   const [newModelName, setNewModelName] = useState("");
 
   const [modalSubmitting, setModalSubmitting] = useState(false);
+  const [isMobileModalOpen, setIsMobileModalOpen] = useState(false);
 
   // Load catalog on mount
   useEffect(() => {
@@ -94,73 +125,106 @@ export function DeviceForm({
     loadCatalog();
   }, []);
 
-  // Update brand/model defaults when device_type changes
-  const handleDeviceTypeChange = (newType: DeviceType) => {
-    // Check if current brand exists for this type
-    const brandsForType = Array.from(
-      new Set(
-        catalog
-          .filter((c) => !c.device_type || c.device_type === newType)
-          .map((c) => c.brand)
-      )
-    );
-
-    let nextBrand = formData.brand;
-    if (brandsForType.length > 0 && (!nextBrand || !brandsForType.includes(nextBrand))) {
-      nextBrand = brandsForType[0];
+  // Auto-fetch live models from API / presets whenever brand or device_type changes
+  useEffect(() => {
+    let active = true;
+    async function fetchLiveModels() {
+      if (!formData.brand) return;
+      setLoadingApiModels(true);
+      try {
+        const query = new URLSearchParams({
+          action: "models",
+          brand: formData.brand,
+          deviceType: formData.device_type,
+        });
+        const res = await fetch(`/api/external-devices?${query.toString()}`);
+        const json = await res.json();
+        if (active && json.success && Array.isArray(json.models)) {
+          const names = json.models.map((m: { name: string }) => m.name);
+          setLiveApiModels(names);
+        }
+      } catch (e) {
+        console.warn("Failed to fetch live API models for brand:", e);
+      } finally {
+        if (active) setLoadingApiModels(false);
+      }
     }
 
-    // Filter models for next brand
-    const availableModels = catalog
-      .filter((c) => c.brand.toLowerCase() === nextBrand.toLowerCase())
-      .map((c) => c.model);
+    fetchLiveModels();
+    return () => {
+      active = false;
+    };
+  }, [formData.brand, formData.device_type]);
+
+  const POPULAR_BRANDS = [
+    "Apple",
+    "Dell",
+    "HP",
+    "Lenovo",
+    "Asus",
+    "Acer",
+    "Samsung",
+    "DJI",
+    "OnePlus",
+    "Xiaomi",
+    "Vivo",
+    "Oppo",
+    "Google",
+    "Realme",
+    "Motorola",
+    "Nothing",
+    "Honor",
+    "Sony",
+    "Autel Robotics",
+  ];
+
+  // Update brand/model defaults when device_type changes
+  const handleDeviceTypeChange = (newType: DeviceType) => {
+    let nextBrand = formData.brand;
+    if (!nextBrand) {
+      nextBrand = newType === "Drone" ? "DJI" : newType === "MacBook" || newType === "iPhone" ? "Apple" : "Dell";
+    }
 
     setFormData({
       ...formData,
       device_type: newType,
       brand: nextBrand,
-      model: availableModels.length > 0 ? availableModels[0] : "",
     });
     setIsCustomModel(false);
   };
 
-  // When Brand changes, filter Models for that brand
+  // When Brand changes, update brand in state
   const handleBrandChange = (newBrand: string) => {
-    const availableModels = catalog
-      .filter((c) => c.brand.toLowerCase() === newBrand.toLowerCase())
-      .map((c) => c.model);
-
     setFormData({
       ...formData,
       brand: newBrand,
-      model: availableModels.length > 0 ? availableModels[0] : "",
     });
     setIsCustomModel(false);
   };
 
-  // Compute available Brands for current Device Type
+  // Compute available Brands (Popular brands + Catalog brands + current brand)
   const availableBrands = Array.from(
-    new Set(
-      catalog
+    new Set([
+      ...POPULAR_BRANDS,
+      ...catalog
         .filter((c) => !c.device_type || c.device_type === formData.device_type)
-        .map((c) => c.brand)
-    )
+        .map((c) => c.brand),
+      formData.brand,
+    ].filter(Boolean))
   );
-  // Include current brand if custom
-  if (formData.brand && !availableBrands.includes(formData.brand)) {
-    availableBrands.unshift(formData.brand);
-  }
-  if (availableBrands.length === 0) {
-    availableBrands.push("Apple", "Samsung", "Dell", "HP", "Lenovo", "Asus");
-  }
 
-  // Compute available Models for current selected Brand & Device Type
-  const availableModels = catalog
-    .filter((c) => {
-      const matchBrand = c.brand.toLowerCase() === (formData.brand || "").toLowerCase();
-      return matchBrand;
-    })
-    .map((c) => c.model);
+  // Combined models: Live API models + DB catalog items (deduplicated)
+  const combinedModels = useMemo(() => {
+    const list: string[] = [...liveApiModels];
+    catalog
+      .filter((c) => c.brand.toLowerCase() === (formData.brand || "").toLowerCase())
+      .forEach((c) => {
+        if (!list.some((item) => item.toLowerCase() === c.model.toLowerCase())) {
+          list.push(c.model);
+        }
+      });
+    return list;
+  }, [liveApiModels, catalog, formData.brand]);
 
   // Quick Add Handlers
   const handleAddTypeSubmit = async (e: FormEvent) => {
@@ -252,6 +316,12 @@ export function DeviceForm({
     setPhotoPreviews(updatedPreviews);
   };
 
+  const handleMobilePhotosReceived = (newFiles: File[]) => {
+    setPhotos((prev) => [...prev, ...newFiles]);
+    const newPreviews = newFiles.map((file) => URL.createObjectURL(file));
+    setPhotoPreviews((prev) => [...prev, ...newPreviews]);
+  };
+
   const validate = (): boolean => {
     const newErrors: DeviceFormErrors = {};
 
@@ -294,9 +364,9 @@ export function DeviceForm({
       <Card>
         <CardContent className="pt-6">
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Customer Select */}
-              <div className="md:col-span-2">
+              <div className="md:col-span-2 lg:col-span-3">
                 <Select
                   label="Customer *"
                   required
@@ -377,48 +447,56 @@ export function DeviceForm({
                 </div>
               </div>
 
-              {/* Model with + Quick Add & Brand Association */}
+              {/* Model with Live API Suggestions & Freeform Input */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                     Model *
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => setIsAddModelModalOpen(true)}
-                    className="inline-flex items-center gap-1 text-xs font-bold text-[#009688] hover:underline"
-                    title={`Add new model for ${formData.brand}`}
-                  >
-                    <span className="w-4 h-4 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 flex items-center justify-center text-xs">
-                      +
-                    </span>
-                    <span>Add Model</span>
-                  </button>
+                  <span className="text-[11px] text-teal-600 dark:text-teal-400 font-medium inline-flex items-center gap-1">
+                    {loadingApiModels ? (
+                      <>
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Fetching models from API...
+                      </>
+                    ) : combinedModels.length > 0 ? (
+                      <>
+                        <Sparkles className="w-3 h-3 text-teal-500" />
+                        {combinedModels.length} models loaded (Live API)
+                      </>
+                    ) : (
+                      <span className="text-slate-400">Type any model name</span>
+                    )}
+                  </span>
                 </div>
 
-                {availableModels.length > 0 ? (
-                  <Select
-                    disabled={isLoading}
-                    options={availableModels.map((m) => ({ label: m, value: m }))}
-                    value={
-                      availableModels.includes(formData.model)
-                        ? formData.model
-                        : availableModels[0] || ""
-                    }
-                    onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                    error={errors.model}
-                  />
-                ) : (
+                <div className="relative">
                   <Input
-                    placeholder="Type model name"
+                    list="device-models-live-datalist"
+                    placeholder={
+                      loadingApiModels
+                        ? "Loading models from API..."
+                        : combinedModels.length > 0
+                        ? `Type to search or choose (e.g. ${combinedModels[0]})...`
+                        : "Type model name..."
+                    }
                     value={formData.model}
                     onChange={(e) =>
                       setFormData({ ...formData, model: e.target.value })
                     }
                     error={errors.model}
                     disabled={isLoading}
+                    autoComplete="off"
                   />
-                )}
+                  <datalist id="device-models-live-datalist">
+                    {combinedModels.map((m) => (
+                      <option key={m} value={m} />
+                    ))}
+                  </datalist>
+                </div>
+                <p className="text-[11px] text-slate-400 italic">
+                  Powered by Live API — auto-suggests as you type, or enter any custom model directly (no manual adding needed).
+                </p>
               </div>
 
               {/* Serial Number */}
@@ -500,7 +578,7 @@ export function DeviceForm({
               />
 
               {/* Accessories */}
-              <div className="md:col-span-2 space-y-1.5">
+              <div className="md:col-span-2 lg:col-span-3 space-y-1.5">
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Accessories Received
                 </label>
@@ -517,7 +595,7 @@ export function DeviceForm({
               </div>
 
               {/* Physical Condition */}
-              <div className="md:col-span-2 space-y-1.5">
+              <div className="md:col-span-2 lg:col-span-3 space-y-1.5">
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Physical Condition at Intake
                 </label>
@@ -534,17 +612,84 @@ export function DeviceForm({
               </div>
 
               {/* Device Intake Photos Upload */}
-              <div className="md:col-span-2 space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Device Intake Photos (Optional)
-                </label>
-                <div className="flex items-center gap-3">
-                  <label className="inline-flex items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer transition-colors">
-                    <svg className="h-5 w-5 mr-2 text-[#009688]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    Select Device Photos
+              <div className="md:col-span-2 lg:col-span-3 space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200">
+                      Device Intake Photos (Optional)
+                    </label>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Snap condition photos with your phone camera or browse files on this computer
+                    </p>
+                  </div>
+                  {photos.length > 0 && (
+                    <span className="text-xs font-mono font-medium px-2 py-0.5 rounded bg-teal-50 dark:bg-teal-950/50 text-[#009688]">
+                      {photos.length} {photos.length === 1 ? "photo" : "photos"} selected
+                    </span>
+                  )}
+                </div>
+
+                {/* 1. Existing Uploaded Photos (when editing) */}
+                {existingPhotos.length > 0 && (
+                  <div className="space-y-2 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                        <ImageIcon className="w-3.5 h-3.5 text-[#009688]" />
+                        Existing Intake Photos ({existingPhotos.length})
+                      </span>
+                      <span className="text-[11px] text-slate-400">Click photo to view large</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3 pt-1">
+                      {existingPhotos.map((att) => (
+                        <div
+                          key={att.id}
+                          className="relative group rounded-xl border border-slate-200 dark:border-slate-700/80 overflow-hidden bg-white dark:bg-slate-800 aspect-square min-h-[110px] shadow-2xs"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={att.file_url}
+                            alt={att.file_name}
+                            onClick={() => setActiveLightboxUrl(att.file_url)}
+                            className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
+                          />
+                          <button
+                            type="button"
+                            disabled={deletingAttachmentId === att.id}
+                            onClick={() => handleDeleteExistingPhoto(att.id, att.file_url)}
+                            className="absolute top-1.5 right-1.5 bg-slate-900/80 hover:bg-rose-950 text-rose-400 hover:text-white rounded-full p-1.5 focus:outline-none shadow-md transition-colors cursor-pointer"
+                            title="Delete this photo"
+                          >
+                            {deletingAttachmentId === att.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. Action Buttons to Add More Photos */}
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Option 1: Mobile Phone Camera via QR */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsMobileModalOpen(true)}
+                    className="h-10 px-4 text-xs font-semibold border-teal-200 dark:border-teal-800/80 bg-teal-50/50 dark:bg-teal-950/30 text-teal-800 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/50"
+                  >
+                    <Smartphone className="w-4 h-4 mr-2 text-[#009688]" />
+                    {isEdit ? "Add More via Phone (Scan QR)" : "Take via Phone Camera (Scan QR)"}
+                  </Button>
+
+                  {/* Option 2: Upload from Laptop / PC */}
+                  <label className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer transition-colors h-10 shadow-2xs">
+                    <Upload className="h-4 w-4 mr-2 text-slate-500" />
+                    Browse Files on Laptop
                     <input
                       type="file"
                       multiple
@@ -554,37 +699,38 @@ export function DeviceForm({
                       className="hidden"
                     />
                   </label>
-                  <span className="text-xs text-slate-400">
-                    Upload front, back, screen, or damage photos
-                  </span>
                 </div>
 
-                {/* Photo Previews */}
+                {/* 3. Newly Added Photos Previews */}
                 {photoPreviews.length > 0 && (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-                    {photoPreviews.map((preview, index) => (
-                      <div
-                        key={index}
-                        className="relative group rounded-lg border border-slate-200 overflow-hidden bg-slate-100 aspect-square dark:border-slate-800 dark:bg-slate-800"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={preview}
-                          alt={`Intake photo ${index + 1}`}
-                          className="w-full h-full object-cover"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removePhoto(index)}
-                          className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-90 hover:opacity-100 focus:outline-none shadow-md"
-                          title="Remove photo"
+                  <div className="space-y-1 pt-1">
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      New Photos to Save ({photoPreviews.length})
+                    </span>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3 pt-1">
+                      {photoPreviews.map((preview, index) => (
+                        <div
+                          key={index}
+                          className="relative group rounded-xl border border-teal-300 dark:border-teal-700 overflow-hidden bg-slate-100 aspect-square min-h-[110px] dark:bg-slate-800 shadow-2xs"
                         >
-                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={preview}
+                            alt={`New intake photo ${index + 1}`}
+                            onClick={() => setActiveLightboxUrl(preview)}
+                            className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removePhoto(index)}
+                            className="absolute top-1.5 right-1.5 bg-slate-900/80 hover:bg-slate-900 text-rose-400 rounded-full p-1.5 focus:outline-none shadow-md transition-colors"
+                            title="Remove photo"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -693,6 +839,32 @@ export function DeviceForm({
           </div>
         </form>
       </Modal>
+
+      {/* MOBILE QR CAMERA INTAKE MODAL */}
+      <MobileUploadCompanionModal
+        isOpen={isMobileModalOpen}
+        onClose={() => setIsMobileModalOpen(false)}
+        onPhotosReceived={handleMobilePhotosReceived}
+      />
+
+      {/* FULL-SIZE PHOTO PREVIEW LIGHTBOX */}
+      {activeLightboxUrl && (
+        <Modal
+          isOpen={!!activeLightboxUrl}
+          onClose={() => setActiveLightboxUrl(null)}
+          title="Intake Photo Preview"
+          maxWidth="2xl"
+        >
+          <div className="flex flex-col items-center justify-center p-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={activeLightboxUrl}
+              alt="Photo preview full"
+              className="max-h-[75vh] w-auto max-w-full rounded-lg object-contain shadow-md"
+            />
+          </div>
+        </Modal>
+      )}
     </>
   );
 }

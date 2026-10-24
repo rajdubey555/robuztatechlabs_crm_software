@@ -13,6 +13,16 @@ import {
   buildWhatsAppClickUrl,
   MultiPartItem
 } from "@/services/whatsappService";
+import {
+  Package,
+  CheckCircle2,
+  XCircle,
+  MessageSquare,
+  ZoomIn,
+  Clock,
+  Send,
+  FileText
+} from "lucide-react";
 
 export interface PartRequestListProps {
   requests: PartRequest[];
@@ -224,32 +234,36 @@ export function PartRequestList({
             <button
               onClick={() => handleBulkStatusUpdate("ORDERED")}
               disabled={Boolean(updatingId)}
-              className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 font-bold text-white shadow-xs transition-transform active:scale-95"
+              className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 font-semibold text-white shadow-xs transition-transform active:scale-95"
             >
-              📦 Mark Ordered ({selectedCount})
+              <Package className="w-3.5 h-3.5" />
+              Mark Ordered ({selectedCount})
             </button>
 
             <button
               onClick={() => handleBulkStatusUpdate("RECEIVED")}
               disabled={Boolean(updatingId)}
-              className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 font-bold text-white shadow-xs transition-transform active:scale-95"
+              className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 font-semibold text-white shadow-xs transition-transform active:scale-95"
             >
-              ✅ Mark Received ({selectedCount})
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Mark Received ({selectedCount})
             </button>
 
             <button
               onClick={() => handleBulkStatusUpdate("CANCELLED")}
               disabled={Boolean(updatingId)}
-              className="text-xs px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 font-bold text-white shadow-xs transition-transform active:scale-95"
+              className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 font-semibold text-white shadow-xs transition-transform active:scale-95"
             >
-              🚫 Cancel Selected ({selectedCount})
+              <XCircle className="w-3.5 h-3.5" />
+              Cancel Selected ({selectedCount})
             </button>
 
             <button
               onClick={handleSendConsolidatedWhatsApp}
-              className="text-xs px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 font-bold text-white shadow-xs flex items-center gap-1.5 transition-transform active:scale-95"
+              className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 font-semibold text-white shadow-xs transition-transform active:scale-95"
             >
-              💬 WhatsApp PO
+              <MessageSquare className="w-3.5 h-3.5" />
+              WhatsApp PO
             </button>
 
             <button
@@ -315,7 +329,7 @@ export function PartRequestList({
                     {req.image_url ? (
                       <div
                         onClick={() => setPreviewImageUrl(req.image_url || null)}
-                        className="w-12 h-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 cursor-pointer group relative bg-slate-100 dark:bg-slate-800"
+                        className="w-11 h-11 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 cursor-pointer group relative bg-slate-100 dark:bg-slate-800"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
@@ -323,13 +337,13 @@ export function PartRequestList({
                           alt={req.part_name}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                         />
-                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[9px] font-bold">
-                          🔍
+                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                          <ZoomIn className="w-4 h-4" />
                         </div>
                       </div>
                     ) : (
-                      <div className="w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-800 flex items-center justify-center text-xl shrink-0">
-                        🔩
+                      <div className="w-11 h-11 rounded-lg bg-teal-50 dark:bg-teal-950/40 border border-teal-100 dark:border-teal-900/40 flex items-center justify-center text-[#009688] shrink-0">
+                        <Package className="w-5 h-5" />
                       </div>
                     )}
                   </div>
@@ -338,15 +352,15 @@ export function PartRequestList({
                   <div className="space-y-1 min-w-0 flex-1">
                     {/* Title & Badges Row */}
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-[11px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                      <span className="font-mono text-[11px] font-semibold text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
                         {req.request_code}
                       </span>
 
-                      <h4 className="text-sm font-extrabold text-slate-900 dark:text-white capitalize truncate max-w-[200px] sm:max-w-xs">
+                      <h4 className="text-sm font-semibold text-slate-900 dark:text-white capitalize truncate max-w-[200px] sm:max-w-xs">
                         {req.part_name}
                       </h4>
 
-                      <span className="text-[10px] font-bold bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300 border border-teal-200 dark:border-teal-800 px-2 py-0.5 rounded-full">
+                      <span className="text-[10px] font-semibold bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300 border border-teal-200 dark:border-teal-800 px-2 py-0.5 rounded-full">
                         Qty: {req.quantity}
                       </span>
 
@@ -356,14 +370,15 @@ export function PartRequestList({
                     {/* Meta Row: Job + Customer + Vendor + Date */}
                     <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
                       {showJobDetails && (req.job_card_number || repairJob?.job_code) && (
-                        <span className="font-semibold text-[#009688]">
-                          📋 Job #{req.job_card_number || repairJob?.job_code}
+                        <span className="inline-flex items-center gap-1 font-semibold text-[#009688]">
+                          <FileText className="w-3 h-3" />
+                          Job #{req.job_card_number || repairJob?.job_code}
                         </span>
                       )}
 
                       <span>
                         Vendor:{" "}
-                        <strong className="text-slate-800 dark:text-slate-200 font-bold">
+                        <strong className="text-slate-800 dark:text-slate-200 font-medium">
                           {req.vendor?.name || "Unassigned"}
                         </strong>
                         {req.vendor?.phone ? ` (${req.vendor.phone})` : ""}
@@ -390,11 +405,11 @@ export function PartRequestList({
                   {/* WhatsApp Button */}
                   <button
                     onClick={() => handleSendWhatsApp(req)}
-                    className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-2xs transition-all active:scale-95 shrink-0"
+                    className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white inline-flex items-center gap-1.5 shadow-2xs transition-colors shrink-0"
                     title="Send WhatsApp PO to Vendor"
                   >
-                    <span>💬</span>
-                    <span className="hidden sm:inline">Send WhatsApp</span>
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">WhatsApp PO</span>
                     <span className="sm:hidden">WhatsApp</span>
                   </button>
 
@@ -406,20 +421,20 @@ export function PartRequestList({
                       onChange={(e) =>
                         handleStatusUpdate(req.id, e.target.value as PartRequestStatus)
                       }
-                      className={`text-xs font-bold px-2.5 py-1.5 rounded-lg border cursor-pointer focus:outline-none transition-all shadow-2xs ${
+                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border cursor-pointer focus:outline-none transition-colors shadow-2xs ${
                         st === "PENDING" || st === "REQUESTED"
-                          ? "bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300"
+                          ? "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300"
                           : st === "ORDERED"
-                          ? "bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300"
+                          ? "bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300"
                           : st === "RECEIVED"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300"
-                          : "bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300"
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300"
+                          : "bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300"
                       }`}
                     >
-                      <option value="PENDING">⏳ PENDING</option>
-                      <option value="ORDERED">📦 ORDERED</option>
-                      <option value="RECEIVED">✅ RECEIVED</option>
-                      <option value="CANCELLED">🚫 CANCELLED</option>
+                      <option value="PENDING">Pending</option>
+                      <option value="ORDERED">Ordered</option>
+                      <option value="RECEIVED">Received</option>
+                      <option value="CANCELLED">Cancelled</option>
                     </select>
                   </div>
                 </div>

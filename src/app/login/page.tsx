@@ -42,8 +42,11 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/dashboard");
-      router.refresh();
+      if (typeof window !== "undefined") {
+        window.location.href = "/dashboard";
+      } else {
+        router.push("/dashboard");
+      }
     } catch {
       setError("An unexpected error occurred. Please try again.");
       setLoading(false);

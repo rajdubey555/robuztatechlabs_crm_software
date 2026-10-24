@@ -12,6 +12,18 @@ import { JobStatusBadge } from "@/components/jobs/JobStatusBadge";
 import { JobPriorityBadge } from "@/components/jobs/JobPriorityBadge";
 import { BRANCHES } from "@/types/branch";
 import { getEmployeeById, getEmployeeAssignedJobs } from "@/modules/employees";
+import {
+  ArrowLeft,
+  Pencil,
+  Key,
+  User,
+  MapPin,
+  CreditCard,
+  Wrench,
+  CheckCircle2,
+  Clock,
+  Briefcase
+} from "lucide-react";
 
 export default function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -62,8 +74,9 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   if (loading) {
     return (
       <AppShell userEmail={userEmail}>
-        <div className="flex justify-center items-center py-20">
+        <div className="flex flex-col justify-center items-center py-24 space-y-3">
           <LoadingSpinner size="lg" className="text-[#009688]" />
+          <p className="text-xs text-slate-400">Loading staff profile...</p>
         </div>
       </AppShell>
     );
@@ -78,7 +91,8 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           </Alert>
           <Link href="/employees">
             <Button variant="outline" size="sm">
-              &larr; Back to Employees
+              <ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
+              Back to Employees Directory
             </Button>
           </Link>
         </div>
@@ -96,143 +110,154 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
 
   return (
     <AppShell userEmail={userEmail}>
+      <div className="space-y-5 w-full">
         {/* Navigation Breadcrumbs */}
-        <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-          <Link href="/employees" className="hover:text-[#009688] transition-colors">
-            Employees
+        <div className="flex items-center justify-between pb-1">
+          <Link
+            href="/employees"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-[#009688] transition-colors"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            Back to Employees Directory
           </Link>
-          <span>/</span>
-          <span className="text-slate-900 dark:text-white font-medium">
-            {employee.employee_code}
-          </span>
+          <span className="text-xs text-slate-400 font-mono">ID: {employee.employee_code}</span>
         </div>
 
-        {/* Profile Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                  {employee.full_name}
-                </h1>
-                <Badge variant="primary">{employee.employee_code}</Badge>
-                {employee.is_active ? (
-                  <Badge variant="success">Active</Badge>
-                ) : (
-                  <Badge variant="default">Inactive</Badge>
-                )}
-                {employee.branch && (
-                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${BRANCHES[employee.branch as "south_bopal" | "tragad"]?.badgeColor || "bg-teal-50 text-teal-800 border-teal-300"}`}>
-                    📍 {employee.branch === "both" ? "Both Branches" : BRANCHES[employee.branch as "south_bopal" | "tragad"]?.shortName || employee.branch}
+        {/* TOP PROFILE HEADER */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-xl bg-teal-50 dark:bg-teal-950/40 text-[#009688] font-bold text-lg flex items-center justify-center border border-teal-200 dark:border-teal-800 shrink-0">
+                {employee.full_name.charAt(0).toUpperCase()}
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                    {employee.full_name}
+                  </h1>
+                  <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                    {employee.employee_code}
                   </span>
-                )}
+                  <EmployeeRoleBadge role={employee.role} />
+                  {employee.is_active ? (
+                    <span className="text-xs font-medium px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                      Active Staff
+                    </span>
+                  ) : (
+                    <span className="text-xs font-medium px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                      Inactive
+                    </span>
+                  )}
+                  {employee.branch && (
+                    <span className="text-xs font-medium px-2.5 py-0.5 rounded-md bg-teal-50 text-teal-800 dark:bg-teal-950/40 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                      {employee.branch === "both" ? "Both Branches" : BRANCHES[employee.branch as "south_bopal" | "tragad"]?.shortName || employee.branch}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500">
+                  Specialization: <strong className="capitalize text-slate-700 dark:text-slate-300 font-medium">{employee.specialization || "General Repair"}</strong>
+                  {employee.email ? ` • ${employee.email}` : ""}
+                  {employee.phone ? ` • +91 ${employee.phone}` : ""}
+                </p>
               </div>
-              <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400 mt-1">
-                <EmployeeRoleBadge role={employee.role} />
-                <span>•</span>
-                <span className="capitalize font-medium">
-                  Specialization: {employee.specialization || "General"}
-                </span>
-              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <Link href="/permissions">
+                <Button variant="outline" size="sm" className="h-8.5 text-xs font-semibold">
+                  <Key className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
+                  Staff Permissions
+                </Button>
+              </Link>
+              <Link href={`/employees/${employee.id}/edit`}>
+                <Button variant="primary" size="sm" className="h-8.5 text-xs font-semibold">
+                  <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                  Edit Profile
+                </Button>
+              </Link>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Link href={`/employees/${employee.id}/edit`}>
-              <Button variant="primary" size="sm">
-                <svg className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-                Edit Employee
-              </Button>
-            </Link>
+          {/* Workload Stats Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <div className="p-3 rounded-lg bg-slate-50/70 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
+                  Active Jobs in Progress
+                </span>
+                <span className="text-xl font-bold font-mono tracking-tight text-[#009688] mt-0.5 block">
+                  {activeJobs.length}
+                </span>
+              </div>
+              <div className="w-8 h-8 rounded-lg bg-teal-50 dark:bg-teal-950/40 text-[#009688] flex items-center justify-center shrink-0">
+                <Wrench className="w-4 h-4" />
+              </div>
+            </div>
+
+            <div className="p-3 rounded-lg bg-slate-50/70 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
+                  Completed Repairs
+                </span>
+                <span className="text-xl font-bold font-mono tracking-tight text-emerald-600 dark:text-emerald-400 mt-0.5 block">
+                  {completedJobs.length}
+                </span>
+              </div>
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-500 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+            </div>
+
+            <div className="p-3 rounded-lg bg-slate-50/70 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
+                  Lifetime Assigned
+                </span>
+                <span className="text-xl font-bold font-mono tracking-tight text-slate-900 dark:text-white mt-0.5 block">
+                  {assignedJobs.length}
+                </span>
+              </div>
+              <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
+                <Briefcase className="w-4 h-4 text-[#009688]" />
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Workload Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card>
-            <CardContent className="p-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Active Jobs
-                </p>
-                <p className="text-2xl font-black text-[#009688] mt-1">
-                  {activeJobs.length}
-                </p>
-              </div>
-              <div className="h-10 w-10 rounded-xl bg-[#009688]/10 text-[#009688] flex items-center justify-center font-bold">
-                ⚡
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Completed Jobs
-                </p>
-                <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
-                  {completedJobs.length}
-                </p>
-              </div>
-              <div className="h-10 w-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold">
-                ✓
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Total Jobs Assigned
-                </p>
-                <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">
-                  {assignedJobs.length}
-                </p>
-              </div>
-              <div className="h-10 w-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-bold">
-                📋
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
         {/* Info & Details Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {/* Contact & Personal Info */}
-          <Card>
+          <Card className="shadow-2xs border-slate-200 dark:border-slate-800">
             <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
-              <CardTitle className="text-base font-bold flex items-center gap-2">
-                <span>👤</span> Personal & Contact Info
+              <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-900 dark:text-white">
+                <User className="w-4 h-4 text-[#009688]" />
+                Personal & Contact Info
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-4 space-y-3 text-sm">
+            <CardContent className="p-4 sm:p-5 space-y-3 text-xs">
               <div>
-                <span className="text-xs text-slate-500 uppercase block font-semibold">Display Name</span>
-                <span className="font-medium text-slate-900 dark:text-white">{employee.display_name || employee.full_name}</span>
+                <span className="text-slate-400 font-medium block">Display Name</span>
+                <span className="font-semibold text-slate-900 dark:text-white">{employee.display_name || employee.full_name}</span>
               </div>
               <div>
-                <span className="text-xs text-slate-500 uppercase block font-semibold">Mobile Number</span>
-                <span className="font-medium text-slate-900 dark:text-white">{employee.phone ? `+91 ${employee.phone}` : "—"}</span>
+                <span className="text-slate-400 font-medium block">Mobile Phone</span>
+                <span className="font-semibold font-mono text-slate-900 dark:text-white">{employee.phone ? `+91 ${employee.phone}` : "—"}</span>
               </div>
               <div>
-                <span className="text-xs text-slate-500 uppercase block font-semibold">Alternate Phone</span>
-                <span className="font-medium text-slate-900 dark:text-white">{employee.alternate_phone || "—"}</span>
+                <span className="text-slate-400 font-medium block">Alternate Phone</span>
+                <span className="font-semibold font-mono text-slate-700 dark:text-slate-300">{employee.alternate_phone || "—"}</span>
               </div>
               <div>
-                <span className="text-xs text-slate-500 uppercase block font-semibold">Email Address</span>
-                <span className="font-medium text-slate-900 dark:text-white">{employee.email || "—"}</span>
+                <span className="text-slate-400 font-medium block">Email Address</span>
+                <span className="font-semibold text-slate-900 dark:text-white">{employee.email || "—"}</span>
               </div>
               <div>
-                <span className="text-xs text-slate-500 uppercase block font-semibold">Identification No.</span>
-                <span className="font-medium font-mono text-slate-900 dark:text-white">{employee.id_number || "—"}</span>
+                <span className="text-slate-400 font-medium block">Identification No.</span>
+                <span className="font-mono font-semibold text-slate-900 dark:text-white">{employee.id_number || "—"}</span>
               </div>
               <div>
-                <span className="text-xs text-slate-500 uppercase block font-semibold">Gender / DOB</span>
-                <span className="font-medium text-slate-900 dark:text-white">
+                <span className="text-slate-400 font-medium block">Gender / DOB</span>
+                <span className="font-medium text-slate-700 dark:text-slate-300">
                   {employee.gender || "—"} {employee.dob ? `(${new Date(employee.dob).toLocaleDateString()})` : ""}
                 </span>
               </div>
@@ -240,115 +265,124 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           </Card>
 
           {/* Address Details */}
-          <Card>
+          <Card className="shadow-2xs border-slate-200 dark:border-slate-800">
             <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
-              <CardTitle className="text-base font-bold flex items-center gap-2">
-                <span>📍</span> Address Details
+              <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-900 dark:text-white">
+                <MapPin className="w-4 h-4 text-[#009688]" />
+                Address Details
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-4 space-y-3 text-sm">
+            <CardContent className="p-4 sm:p-5 space-y-3 text-xs">
               <div>
-                <span className="text-xs text-slate-500 uppercase block font-semibold">Address Line</span>
+                <span className="text-slate-400 font-medium block">Address Line</span>
                 <span className="font-medium text-slate-900 dark:text-white">{employee.address_line || "—"}</span>
               </div>
               <div>
-                <span className="text-xs text-slate-500 uppercase block font-semibold">City / Town</span>
+                <span className="text-slate-400 font-medium block">City / Town</span>
                 <span className="font-medium text-slate-900 dark:text-white">{employee.city_town || "—"}</span>
               </div>
               <div>
-                <span className="text-xs text-slate-500 uppercase block font-semibold">Region / State</span>
+                <span className="text-slate-400 font-medium block">Region / State</span>
                 <span className="font-medium text-slate-900 dark:text-white">{employee.region_state || "—"}</span>
               </div>
               <div>
-                <span className="text-xs text-slate-500 uppercase block font-semibold">Postal / ZIP Code</span>
-                <span className="font-medium font-mono text-slate-900 dark:text-white">{employee.postal_code || "—"}</span>
+                <span className="text-slate-400 font-medium block">Postal / ZIP Code</span>
+                <span className="font-mono font-semibold text-slate-900 dark:text-white">{employee.postal_code || "—"}</span>
               </div>
             </CardContent>
           </Card>
 
           {/* Bank Details */}
-          <Card>
+          <Card className="shadow-2xs border-slate-200 dark:border-slate-800">
             <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
-              <CardTitle className="text-base font-bold flex items-center gap-2">
-                <span>🏦</span> Bank Details
+              <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-900 dark:text-white">
+                <CreditCard className="w-4 h-4 text-[#009688]" />
+                Payout & Bank Details
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-4 space-y-3 text-sm">
+            <CardContent className="p-4 sm:p-5 space-y-3 text-xs">
               <div>
-                <span className="text-xs text-slate-500 uppercase block font-semibold">Account Name</span>
+                <span className="text-slate-400 font-medium block">Account Name</span>
                 <span className="font-medium text-slate-900 dark:text-white">{employee.bank_account_name || "—"}</span>
               </div>
               <div>
-                <span className="text-xs text-slate-500 uppercase block font-semibold">Bank Name</span>
+                <span className="text-slate-400 font-medium block">Bank Name</span>
                 <span className="font-medium text-slate-900 dark:text-white">{employee.bank_name || "—"}</span>
               </div>
               <div>
-                <span className="text-xs text-slate-500 uppercase block font-semibold">Branch</span>
+                <span className="text-slate-400 font-medium block">Branch</span>
                 <span className="font-medium text-slate-900 dark:text-white">{employee.bank_branch || "—"}</span>
               </div>
               <div>
-                <span className="text-xs text-slate-500 uppercase block font-semibold">Account Number</span>
-                <span className="font-medium font-mono text-slate-900 dark:text-white">{employee.bank_account_number || "—"}</span>
+                <span className="text-slate-400 font-medium block">Account Number</span>
+                <span className="font-mono font-semibold text-slate-900 dark:text-white">{employee.bank_account_number || "—"}</span>
               </div>
               <div>
-                <span className="text-xs text-slate-500 uppercase block font-semibold">IFSC Code</span>
-                <span className="font-medium font-mono text-slate-900 dark:text-white">{employee.bank_ifsc || "—"}</span>
+                <span className="text-slate-400 font-medium block">IFSC Code</span>
+                <span className="font-mono font-semibold text-slate-900 dark:text-white">{employee.bank_ifsc || "—"}</span>
               </div>
             </CardContent>
           </Card>
         </div>
 
         {/* Assigned Jobs Section */}
-        <div className="space-y-4">
-          <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-            Assigned Jobs ({assignedJobs.length})
-          </h3>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">
+              Assigned Repair Jobs ({assignedJobs.length})
+            </h3>
+            <span className="text-xs text-slate-400">
+              Active: {activeJobs.length} • Completed: {completedJobs.length}
+            </span>
+          </div>
 
           {assignedJobs.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Job ID</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Device</TableHead>
-                  <TableHead>Priority</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Received Date</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {assignedJobs.map((job) => (
-                  <TableRow key={job.id}>
-                    <TableCell className="font-mono text-xs font-semibold">
-                      <Badge variant="primary">{job.job_code}</Badge>
-                    </TableCell>
-                    <TableCell className="font-medium text-slate-900 dark:text-white">
-                      {job.customer?.full_name || "Unknown"}
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-600 dark:text-slate-300">
-                      {job.device ? `${job.device.brand} ${job.device.model}` : "Unknown Device"}
-                    </TableCell>
-                    <TableCell>
-                      <JobPriorityBadge priority={job.priority} />
-                    </TableCell>
-                    <TableCell>
-                      <JobStatusBadge status={job.status} />
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-500">
-                      {new Date(job.received_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Link href={`/jobs/${job.id}`}>
-                        <Button variant="outline" size="sm">
-                          View Job
-                        </Button>
-                      </Link>
-                    </TableCell>
+            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50/70 dark:bg-slate-800/50">
+                    <TableHead className="py-2.5 px-4 font-semibold text-xs">Job Code</TableHead>
+                    <TableHead className="py-2.5 px-4 font-semibold text-xs">Customer</TableHead>
+                    <TableHead className="py-2.5 px-4 font-semibold text-xs">Device</TableHead>
+                    <TableHead className="py-2.5 px-4 font-semibold text-xs">Priority</TableHead>
+                    <TableHead className="py-2.5 px-4 font-semibold text-xs">Status</TableHead>
+                    <TableHead className="py-2.5 px-4 font-semibold text-xs">Received</TableHead>
+                    <TableHead className="py-2.5 px-4 font-semibold text-xs text-right">Action</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                  {assignedJobs.map((job) => (
+                    <TableRow key={job.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                      <TableCell className="py-2.5 px-4 font-mono font-semibold text-slate-900 dark:text-white">
+                        {job.job_code}
+                      </TableCell>
+                      <TableCell className="py-2.5 px-4 font-medium text-slate-900 dark:text-white">
+                        {job.customer?.full_name || "Unknown"}
+                      </TableCell>
+                      <TableCell className="py-2.5 px-4 text-slate-600 dark:text-slate-300">
+                        {job.device ? `${job.device.brand} ${job.device.model}` : "Unknown Device"}
+                      </TableCell>
+                      <TableCell className="py-2.5 px-4">
+                        <JobPriorityBadge priority={job.priority} />
+                      </TableCell>
+                      <TableCell className="py-2.5 px-4">
+                        <JobStatusBadge status={job.status} />
+                      </TableCell>
+                      <TableCell className="py-2.5 px-4 text-slate-500 font-mono">
+                        {new Date(job.received_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="py-2.5 px-4 text-right">
+                        <Link href={`/jobs/${job.id}`}>
+                          <Button variant="outline" size="sm" className="h-7 text-xs font-medium">
+                            View Job
+                          </Button>
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           ) : (
             <EmptyState
               title="No jobs assigned"
@@ -356,6 +390,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
             />
           )}
         </div>
+      </div>
     </AppShell>
   );
 }

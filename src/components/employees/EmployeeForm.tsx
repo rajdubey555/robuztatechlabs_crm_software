@@ -3,6 +3,7 @@
 import { useState, FormEvent } from "react";
 import { EmployeeFormData, EmployeeFormErrors, EmployeeRole, EmployeeSpecialization } from "@/types/employee";
 import { Input, Select, Button, Card, CardHeader, CardTitle, CardContent, Badge } from "@/components/ui";
+import { User, MapPin, CreditCard, Key, Shield, ArrowRight } from "lucide-react";
 
 export interface EmployeeFormProps {
   initialData?: EmployeeFormData;
@@ -38,6 +39,12 @@ const GENDER_OPTIONS = [
   { label: "Other", value: "Other" },
 ];
 
+const BRANCH_OPTIONS = [
+  { label: "South Bopal Flagship Lab", value: "south_bopal" },
+  { label: "Tragad Service Centre", value: "tragad" },
+  { label: "Both Branches (Floating Staff)", value: "both" },
+];
+
 export function EmployeeForm({
   initialData,
   onSubmit,
@@ -56,6 +63,7 @@ export function EmployeeForm({
     dob: initialData?.dob || "",
     role: initialData?.role || "technician",
     specialization: initialData?.specialization || "laptop",
+    branch: initialData?.branch || "south_bopal",
     is_active: initialData?.is_active !== undefined ? initialData.is_active : true,
     address_line: initialData?.address_line || "",
     region_state: initialData?.region_state || "",
@@ -104,32 +112,38 @@ export function EmployeeForm({
   return (
     <div className="space-y-6">
       {/* Employee Form Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
-        <div className="flex items-center gap-2">
-          <span className="text-base font-bold text-slate-900 dark:text-white">
-            👤 Employee Details & Account Form
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-teal-50 dark:bg-teal-950/40 text-[#009688] flex items-center justify-center">
+            <User className="w-4 h-4" />
+          </div>
+          <span className="text-sm font-bold text-slate-900 dark:text-white">
+            Employee Profile & Access Registration
           </span>
         </div>
 
         <div className="flex items-center gap-2">
           <span className="text-xs text-slate-500">
-            Role permissions are managed globally by Admin:
+            Role permissions managed globally:
           </span>
           <a
             href="/permissions"
-            className="inline-flex items-center gap-1 text-xs font-bold text-[#009688] hover:underline bg-[#e0f2f1] dark:bg-[#004d40]/40 px-3 py-1.5 rounded-lg"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#009688] hover:text-[#00796b] bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 px-3 py-1.5 rounded-lg transition-colors"
           >
-            <span>🔒</span> Go to Permissions →
+            <Key className="w-3.5 h-3.5" />
+            Go to Permissions
+            <ArrowRight className="w-3 h-3" />
           </a>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* SECTION 1: EMPLOYEE INFORMATION */}
-        <Card className="shadow-xs">
+        <Card className="shadow-2xs border-slate-200 dark:border-slate-800">
           <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
-            <CardTitle className="text-base font-bold flex items-center gap-2">
-              <span>👤</span> Employee Information
+            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-900 dark:text-white">
+              <User className="w-4 h-4 text-[#009688]" />
+              Staff Identity & Role Configuration
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-4 space-y-4">
@@ -248,6 +262,15 @@ export function EmployeeForm({
                 onChange={(e) => setFormData({ ...formData, specialization: e.target.value as EmployeeSpecialization })}
               />
 
+              <Select
+                label="Assigned Branch *"
+                required
+                disabled={isLoading}
+                options={BRANCH_OPTIONS}
+                value={formData.branch || "south_bopal"}
+                onChange={(e) => setFormData({ ...formData, branch: e.target.value as "south_bopal" | "tragad" | "both" })}
+              />
+
               <div className="flex items-center space-x-3 pt-6">
                 <input
                   id="is_active"
@@ -266,10 +289,11 @@ export function EmployeeForm({
         </Card>
 
         {/* SECTION 2: ADDRESS DETAILS (OPTIONAL) */}
-        <Card className="shadow-xs">
+        <Card className="shadow-2xs border-slate-200 dark:border-slate-800">
           <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
-            <CardTitle className="text-base font-bold flex items-center gap-2">
-              <span>📍</span> Address Details <span className="text-xs font-normal text-slate-400">(Optional)</span>
+            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-900 dark:text-white">
+              <MapPin className="w-4 h-4 text-[#009688]" />
+              Address Details <span className="text-xs font-normal text-slate-400">(Optional)</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-4 space-y-4">
@@ -312,10 +336,11 @@ export function EmployeeForm({
         </Card>
 
         {/* SECTION 3: BANK DETAILS (OPTIONAL) */}
-        <Card className="shadow-xs">
+        <Card className="shadow-2xs border-slate-200 dark:border-slate-800">
           <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
-            <CardTitle className="text-base font-bold flex items-center gap-2">
-              <span>🏦</span> Bank Details <span className="text-xs font-normal text-slate-400">(Optional)</span>
+            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-900 dark:text-white">
+              <CreditCard className="w-4 h-4 text-[#009688]" />
+              Payout & Bank Details <span className="text-xs font-normal text-slate-400">(Optional)</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-4 space-y-4">

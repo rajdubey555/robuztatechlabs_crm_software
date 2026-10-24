@@ -1,14 +1,16 @@
 "use client";
 
-import React from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { usePermissions } from "@/context/PermissionContext";
+import { ROLE_LABELS, normalizeRole } from "@/types/permissions";
 
 import {
   LayoutDashboard,
   Users,
   Laptop,
-  Layers,
   Wrench,
   Inbox,
   Building2,
@@ -17,6 +19,8 @@ import {
   CreditCard,
   BarChart3,
   Settings,
+  LogOut,
+  Receipt,
 } from "lucide-react";
 
 export interface NavItem {
@@ -62,11 +66,6 @@ export function Sidebar({
       icon: <Laptop className="h-4 w-4 shrink-0" />,
     },
     {
-      label: "Device Catalog",
-      href: "/device-catalog",
-      icon: <Layers className="h-4 w-4 shrink-0" />,
-    },
-    {
       label: "Jobs",
       href: "/jobs",
       icon: <Wrench className="h-4 w-4 shrink-0" />,
@@ -80,6 +79,11 @@ export function Sidebar({
       label: "Vendors",
       href: "/vendors",
       icon: <Building2 className="h-4 w-4 shrink-0" />,
+    },
+    {
+      label: "Expenses",
+      href: "/expenses",
+      icon: <Receipt className="h-4 w-4 shrink-0" />,
     },
     {
       label: "Employees",
@@ -114,6 +118,56 @@ export function Sidebar({
     },
   ];
 
+  const { canAccessPage, isAdmin, currentEmployee, currentRole } = usePermissions();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const allowedNavItems = useMemo(() => {
+    // On SSR and initial hydration frame, render navItems so SSR and Client HTML match 100%
+    if (!mounted) {
+      return navItems;
+    }
+    return navItems.filter((item) => {
+      if (item.disabled) return true;
+      return canAccessPage(item.href);
+    });
+  }, [mounted, canAccessPage]);
+
+  const isUserAdmin = mounted && isAdmin;
+  const activeRole = normalizeRole(currentEmployee?.role || currentRole);
+  const activeRoleLabel = ROLE_LABELS[activeRole] || "Staff";
+
+  const activePersonaName = !mounted
+    ? (userEmail?.split("@")[0] || "User")
+    : isUserAdmin
+    ? "Admin User"
+    : (currentEmployee?.full_name || userEmail?.split("@")[0] || "Staff Member");
+
+  const activePersonaSub = !mounted
+    ? (userEmail || "Super Admin")
+    : isUserAdmin
+    ? (userEmail || "Super Admin")
+    : `${activeRoleLabel} Staff`;
+
+  const supabase = createClient();
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleSignOut = async () => {
+    setLoggingOut(true);
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn("Sign out error:", err);
+    } finally {
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
+      }
+    }
+  };
+
   const sidebarContent = (
     <div className="flex h-full flex-col justify-between bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-all duration-200">
       {/* Brand & Collapse Header */}
@@ -142,13 +196,11 @@ export function Sidebar({
               </div>
             )}
           </Link>
-
-
         </div>
 
         {/* Navigation Items */}
         <nav className="space-y-1 p-3">
-          {navItems.map((item) => {
+          {allowedNavItems.map((item) => {
             const isActive =
               pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
 
@@ -205,17 +257,31 @@ export function Sidebar({
             isCollapsed ? "justify-center" : "px-2"
           }`}
         >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200">
-            {userEmail.charAt(0).toUpperCase()}
+          <div
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#009688]/15 text-[#009688] font-bold text-xs dark:bg-[#009688]/25 dark:text-teal-300"
+            title={isCollapsed ? `${activePersonaName} (${activePersonaSub})` : undefined}
+          >
+            {isUserAdmin ? "A" : activePersonaName.charAt(0).toUpperCase()}
           </div>
           {!isCollapsed && (
-            <div className="flex flex-1 flex-col overflow-hidden">
-              <span className="truncate text-xs font-bold text-slate-900 dark:text-white">
-                Admin User
-              </span>
-              <span className="truncate text-[10px] text-slate-500 dark:text-slate-400">
-                {userEmail}
-              </span>
+            <div className="flex flex-1 items-center justify-between overflow-hidden">
+              <div className="flex flex-col min-w-0 pr-1">
+                <span className="truncate text-xs font-bold text-slate-900 dark:text-white">
+                  {activePersonaName}
+                </span>
+                <span className="truncate text-[10px] text-slate-500 dark:text-slate-400">
+                  {activePersonaSub}
+                </span>
+              </div>
+              <button
+                onClick={handleSignOut}
+                disabled={loggingOut}
+                title="Sign out"
+                aria-label="Sign out"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors shrink-0 cursor-pointer"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+              </button>
             </div>
           )}
         </div>

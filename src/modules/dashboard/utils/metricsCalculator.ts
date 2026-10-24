@@ -7,7 +7,7 @@ export function calculateDashboardMetrics(jobs: RepairJob[]): DashboardMetrics {
     (j) => !["delivered", "closed", "cancelled", "unrepairable"].includes(j.status)
   ).length;
   const completedJobs = jobs.filter((j) =>
-    ["delivered", "closed", "diagnosed"].includes(j.status)
+    ["delivered", "closed", "ready_for_delivery"].includes(j.status)
   ).length;
 
   const revenue = jobs.reduce((acc, j) => {
@@ -37,7 +37,9 @@ export function calculateAttentionMetrics(jobs: RepairJob[]): AttentionMetrics {
       !["cancelled", "unrepairable"].includes(j.status)
   );
 
-  const readyForDeliveryJobs = jobs.filter((j) => j.status === "diagnosed");
+  const readyForDeliveryJobs = jobs.filter(
+    (j) => j.status === "ready_for_delivery" || j.status === "diagnosed"
+  );
 
   return {
     urgentCount: urgentJobs.length,
@@ -52,6 +54,10 @@ export function calculatePipelineCounts(jobs: RepairJob[]): PipelineCounts {
     received: jobs.filter((j) => j.status === "received").length,
     diagnosis: jobs.filter((j) => j.status === "diagnosis_pending").length,
     diagnosed: jobs.filter((j) => j.status === "diagnosed").length,
+    waiting_parts: jobs.filter((j) => j.status === "waiting_parts").length,
+    in_progress: jobs.filter((j) => j.status === "in_progress").length,
+    ready_for_delivery: jobs.filter((j) => j.status === "ready_for_delivery").length,
+    delivered: jobs.filter((j) => j.status === "delivered").length,
     cancelled: jobs.filter((j) => j.status === "cancelled").length,
     unrepairable: jobs.filter((j) => j.status === "unrepairable").length,
   };

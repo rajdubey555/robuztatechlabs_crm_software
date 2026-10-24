@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { CustomerFormData, createCustomer, CustomerForm } from "@/modules/customers";
 import { AppShell } from "@/components/layout/AppShell";
 import { Alert } from "@/components/ui";
+import { ArrowLeft, UserPlus } from "lucide-react";
 
 export default function NewCustomerPage() {
   const [submitting, setSubmitting] = useState(false);
@@ -47,20 +48,26 @@ export default function NewCustomerPage() {
 
   return (
     <AppShell userEmail={userEmail}>
+      <div className="space-y-6 w-full">
         {/* Header & Back Link */}
-        <div className="space-y-1">
+        <div className="space-y-1.5 border-b border-slate-200 dark:border-slate-800 pb-5">
           <Link
             href="/customers"
-            className="inline-flex items-center text-xs font-semibold text-slate-500 hover:text-[#009688] transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-[#009688] transition-colors"
           >
-            ← Back to Customers
+            <ArrowLeft className="w-3.5 h-3.5" />
+            Back to Customers Directory
           </Link>
-          <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            Add New Customer
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Create a new customer profile for laptop/mobile repair jobs
-          </p>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 flex items-center justify-center text-[#009688]">
+              <UserPlus className="w-4 h-4" />
+            </div>
+            <div>
+              <h1 className="font-sans text-xl font-semibold tracking-tight text-slate-900 dark:text-white">
+                Add New Customer
+              </h1>
+            </div>
+          </div>
         </div>
 
         {error && (
@@ -74,6 +81,7 @@ export default function NewCustomerPage() {
           isLoading={submitting}
           submitButtonText="Create Customer"
         />
+      </div>
     </AppShell>
   );
 }

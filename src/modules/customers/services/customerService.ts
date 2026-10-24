@@ -16,6 +16,30 @@ export interface CustomerHistoryResult {
 export async function getCustomers(): Promise<{ data: Customer[]; error: string | null }> {
   const supabase = createClient();
   try {
+    // 1. Try enriched fetch with related devices and jobs counts
+    const { data: enrichedData, error: enrichedError } = await supabase
+      .from("customers")
+      .select(`
+        *,
+        devices(id),
+        repair_jobs(id, status)
+      `)
+      .order("created_at", { ascending: false });
+
+    if (!enrichedError && enrichedData) {
+      const formatted = enrichedData.map((c: any) => ({
+        ...c,
+        devices_count: Array.isArray(c.devices) ? c.devices.length : 0,
+        active_jobs_count: Array.isArray(c.repair_jobs)
+          ? c.repair_jobs.filter(
+              (j: any) => !["delivered", "cancelled"].includes(j.status?.toLowerCase() || "")
+            ).length
+          : 0,
+      }));
+      return { data: formatted as Customer[], error: null };
+    }
+
+    // 2. Fallback to basic fetch if relations query is restricted
     const { data, error } = await supabase
       .from("customers")
       .select("*")
@@ -118,6 +142,7 @@ export async function createCustomer(formData: CustomerFormData): Promise<{ data
       email: formData.email?.trim() || null,
       address: formData.address?.trim() || null,
       city: formData.city?.trim() || null,
+      branch: formData.branch || null,
       notes: formData.notes?.trim() || null,
     };
 
@@ -150,6 +175,7 @@ export async function updateCustomer(id: string, formData: Partial<CustomerFormD
     if (formData.email !== undefined) payload.email = formData.email?.trim() || null;
     if (formData.address !== undefined) payload.address = formData.address?.trim() || null;
     if (formData.city !== undefined) payload.city = formData.city?.trim() || null;
+    if (formData.branch !== undefined) payload.branch = formData.branch || null;
     if (formData.notes !== undefined) payload.notes = formData.notes?.trim() || null;
 
     const { error } = await supabase

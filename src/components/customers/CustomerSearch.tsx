@@ -1,34 +1,37 @@
 "use client";
 
+import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui";
 
 export interface CustomerSearchProps {
   searchTerm: string;
   onSearchChange: (value: string) => void;
+  placeholder?: string;
+  className?: string;
 }
 
-export function CustomerSearch({ searchTerm, onSearchChange }: CustomerSearchProps) {
+export function CustomerSearch({
+  searchTerm,
+  onSearchChange,
+  placeholder = "Search by Name, Phone, Email, ID or City...",
+  className = "w-64 sm:w-72",
+}: CustomerSearchProps) {
   return (
-    <div className="w-full max-w-md">
+    <div className={`relative ${className}`}>
       <Input
-        placeholder="Search by ID, Name, Phone, Email..."
+        placeholder={placeholder}
         value={searchTerm}
         onChange={(e) => onSearchChange(e.target.value)}
-        startIcon={
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-        }
+        startIcon={<Search className="h-4 w-4 text-slate-400" />}
         endIcon={
           searchTerm ? (
             <button
+              type="button"
               onClick={() => onSearchChange("")}
-              className="text-slate-400 hover:text-slate-600 focus:outline-none"
+              className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none"
               aria-label="Clear search"
             >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X className="h-3.5 w-3.5" />
             </button>
           ) : undefined
         }

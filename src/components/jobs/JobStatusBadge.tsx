@@ -7,8 +7,12 @@ export function JobStatusBadge({ status }: { status: JobStatus }) {
     { label: string; variant: "primary" | "warning" | "error" | "default" | "success" | "info" }
   > = {
     received: { label: "Received", variant: "info" },
-    diagnosis_pending: { label: "Pending Assessment", variant: "warning" },
-    diagnosed: { label: "Ready for Repair", variant: "primary" },
+    diagnosis_pending: { label: "In Diagnosis", variant: "warning" },
+    diagnosed: { label: "Diagnosed", variant: "primary" },
+    waiting_parts: { label: "Waiting for Parts", variant: "warning" },
+    in_progress: { label: "Under Repair", variant: "info" },
+    ready_for_delivery: { label: "Ready for Pickup", variant: "success" },
+    delivered: { label: "Delivered", variant: "default" },
     cancelled: { label: "Cancelled", variant: "default" },
     unrepairable: { label: "Unrepairable", variant: "error" },
   };

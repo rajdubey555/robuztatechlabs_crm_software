@@ -241,13 +241,26 @@ export async function updateJob(
  */
 export async function updateJobStatus(
   id: string,
-  newStatus: JobStatus
+  newStatus: JobStatus,
+  finalCost?: number | null
 ): Promise<{ success: boolean; error: string | null }> {
   const supabase = createClient();
   try {
+    const payload: Record<string, unknown> = { status: newStatus };
+    const now = new Date().toISOString();
+
+    if (newStatus === "ready_for_delivery") {
+      payload.completed_at = now;
+    } else if (newStatus === "delivered") {
+      payload.delivered_at = now;
+      if (finalCost !== undefined && finalCost !== null && !isNaN(Number(finalCost))) {
+        payload.final_cost = Number(finalCost);
+      }
+    }
+
     const { error } = await supabase
       .from("repair_jobs")
-      .update({ status: newStatus })
+      .update(payload)
       .eq("id", id);
 
     if (error) {
@@ -361,3 +374,45 @@ export async function addDiagnosis(
     return { success: false, error: msg };
   }
 }
+
+/**
+ * Permanently delete a repair job by ID
+ */
+export async function deleteJob(id: string): Promise<{ success: boolean; error: string | null }> {
+  const supabase = createClient();
+  try {
+    // 1. Manually clean up child records if any exist to prevent foreign key blocks
+    try {
+      await supabase.from("diagnoses").delete().eq("repair_job_id", id);
+      await supabase.from("job_assignments").delete().eq("repair_job_id", id);
+      await supabase.from("part_requests").delete().eq("repair_job_id", id);
+    } catch (cleanErr) {
+      console.warn("Child cleanup warning:", cleanErr);
+    }
+
+    // 2. Delete main repair_jobs record
+    const { data, error } = await supabase
+      .from("repair_jobs")
+      .delete()
+      .eq("id", id)
+      .select();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    // If Supabase RLS silently blocked the deletion (0 rows deleted)
+    if (!data || data.length === 0) {
+      return {
+        success: false,
+        error: "Job record could not be deleted. Supabase Row-Level Security (RLS) is blocking DELETE on repair_jobs table. Please execute the migration query (20261024_add_delete_policy_repair_jobs.sql) in your Supabase SQL Editor.",
+      };
+    }
+
+    return { success: true, error: null };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Failed to delete repair job.";
+    return { success: false, error: msg };
+  }
+}
+

@@ -12,9 +12,15 @@ export default function SignOutButton() {
 
   const handleSignOut = async () => {
     setLoading(true);
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn("Sign out error:", err);
+    } finally {
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
+      }
+    }
   };
 
   return (

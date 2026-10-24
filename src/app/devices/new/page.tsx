@@ -8,6 +8,7 @@ import { DeviceFormData, createDevice, DeviceForm } from "@/modules/devices";
 import { Customer, getCustomers } from "@/modules/customers";
 import { AppShell } from "@/components/layout/AppShell";
 import { Alert, LoadingSpinner, EmptyState, Button } from "@/components/ui";
+import { ArrowLeft, Laptop } from "lucide-react";
 
 function NewDeviceContent() {
   const router = useRouter();
@@ -64,20 +65,24 @@ function NewDeviceContent() {
 
   return (
     <AppShell userEmail={userEmail}>
+      <div className="space-y-6 w-full">
         {/* Header */}
-        <div className="space-y-1">
+        <div className="space-y-2 border-b border-slate-200 dark:border-slate-800 pb-4">
           <Link
             href="/devices"
-            className="inline-flex items-center text-xs font-semibold text-slate-500 hover:text-[#009688] transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-[#009688] transition-colors"
           >
-            ← Back to Devices
+            <ArrowLeft className="w-3.5 h-3.5" />
+            Back to Devices Directory
           </Link>
-          <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            Register New Device
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Register a laptop, mobile phone, or tablet for repair intake
-          </p>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 flex items-center justify-center text-[#009688]">
+              <Laptop className="w-4 h-4" />
+            </div>
+            <h1 className="font-sans text-xl font-semibold tracking-tight text-slate-900 dark:text-white">
+              Register New Device
+            </h1>
+          </div>
         </div>
 
         {error && (
@@ -116,6 +121,7 @@ function NewDeviceContent() {
             submitButtonText="Register Device"
           />
         )}
+      </div>
     </AppShell>
   );
 }

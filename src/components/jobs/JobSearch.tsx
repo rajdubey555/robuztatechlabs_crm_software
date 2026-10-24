@@ -1,6 +1,7 @@
 "use client";
 
-import { Input, Select } from "@/components/ui";
+import { Input, Select, Button } from "@/components/ui";
+import { Search, X, RotateCcw } from "lucide-react";
 
 export interface JobSearchProps {
   searchTerm: string;
@@ -16,6 +17,7 @@ export interface JobSearchProps {
   diagnosisFilter: string;
   onDiagnosisFilterChange: (diag: string) => void;
   employeeOptions?: { label: string; value: string }[];
+  onResetFilters?: () => void;
 }
 
 export function JobSearch({
@@ -32,12 +34,17 @@ export function JobSearch({
   diagnosisFilter,
   onDiagnosisFilterChange,
   employeeOptions = [],
+  onResetFilters,
 }: JobSearchProps) {
   const statusOptions = [
     { label: "All Statuses", value: "" },
     { label: "Received", value: "received" },
-    { label: "Diagnosis Pending", value: "diagnosis_pending" },
+    { label: "In Diagnosis", value: "diagnosis_pending" },
     { label: "Diagnosed", value: "diagnosed" },
+    { label: "Waiting for Parts", value: "waiting_parts" },
+    { label: "Under Repair", value: "in_progress" },
+    { label: "Ready for Pickup", value: "ready_for_delivery" },
+    { label: "Delivered", value: "delivered" },
     { label: "Cancelled", value: "cancelled" },
     { label: "Unrepairable", value: "unrepairable" },
   ];
@@ -56,77 +63,80 @@ export function JobSearch({
     { label: "Unassigned Only", value: "unassigned" },
   ];
 
-  const diagnosisOptions = [
-    { label: "All Diagnosis", value: "" },
-    { label: "Diagnosed", value: "diagnosed" },
-    { label: "Pending Diag", value: "pending" },
-  ];
-
   const empSelectOptions = [
     { label: "All Technicians", value: "" },
     ...employeeOptions,
   ];
 
+  const hasActiveFilters = Boolean(
+    searchTerm || selectedStatus || selectedPriority || assignmentFilter || employeeFilter || diagnosisFilter
+  );
+
   return (
-    <div className="space-y-3 w-full bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
-      {/* Top Search Input */}
-      <div>
-        <Input
-          placeholder="Search Job ID, Technician Name, Customer Name, Phone, Brand, Model, S/N..."
-          value={searchTerm}
-          onChange={(e) => onSearchChange(e.target.value)}
-          startIcon={
-            <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          }
-          endIcon={
-            searchTerm ? (
-              <button
-                onClick={() => onSearchChange("")}
-                className="text-slate-400 hover:text-slate-600 focus:outline-none"
-                aria-label="Clear search"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            ) : undefined
-          }
-        />
-      </div>
+    <div className="w-full bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3">
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+        {/* Search Input */}
+        <div className="relative flex-1 max-w-lg">
+          <Input
+            placeholder="Search Job ID, Customer, Phone, Device, S/N..."
+            value={searchTerm}
+            onChange={(e) => onSearchChange(e.target.value)}
+            startIcon={<Search className="w-4 h-4 text-slate-400" />}
+            endIcon={
+              searchTerm ? (
+                <button
+                  type="button"
+                  onClick={() => onSearchChange("")}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 focus:outline-none"
+                  aria-label="Clear search"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              ) : undefined
+            }
+          />
+        </div>
 
-      {/* Categorized Filter Selectors Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 pt-1">
-        <Select
-          options={diagnosisOptions}
-          value={diagnosisFilter}
-          onChange={(e) => onDiagnosisFilterChange(e.target.value)}
-        />
+        {/* Filters Group */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 flex-wrap items-center">
+          <Select
+            options={statusOptions}
+            value={selectedStatus}
+            onChange={(e) => onStatusChange(e.target.value)}
+          />
 
-        <Select
-          options={assignmentOptions}
-          value={assignmentFilter}
-          onChange={(e) => onAssignmentFilterChange(e.target.value)}
-        />
+          <Select
+            options={priorityOptions}
+            value={selectedPriority}
+            onChange={(e) => onPriorityChange(e.target.value)}
+          />
 
-        <Select
-          options={empSelectOptions}
-          value={employeeFilter}
-          onChange={(e) => onEmployeeFilterChange(e.target.value)}
-        />
+          <Select
+            options={assignmentOptions}
+            value={assignmentFilter}
+            onChange={(e) => onAssignmentFilterChange(e.target.value)}
+          />
 
-        <Select
-          options={statusOptions}
-          value={selectedStatus}
-          onChange={(e) => onStatusChange(e.target.value)}
-        />
+          <Select
+            options={empSelectOptions}
+            value={employeeFilter}
+            onChange={(e) => onEmployeeFilterChange(e.target.value)}
+          />
+        </div>
 
-        <Select
-          options={priorityOptions}
-          value={selectedPriority}
-          onChange={(e) => onPriorityChange(e.target.value)}
-        />
+        {/* Clear Filter button if filters active */}
+        {hasActiveFilters && onResetFilters && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onResetFilters}
+            className="h-9 px-3 text-xs text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 shrink-0"
+          >
+            <RotateCcw className="w-3.5 h-3.5 mr-1" />
+            Reset
+          </Button>
+        )}
       </div>
     </div>
   );

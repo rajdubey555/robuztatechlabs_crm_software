@@ -6,9 +6,12 @@ export interface Customer {
   alternate_phone?: string | null;
   email?: string | null;
   address?: string | null;
+  state?: string | null;
   city?: string | null;
   branch?: "south_bopal" | "tragad" | "both" | null;
   notes?: string | null;
+  devices_count?: number;
+  active_jobs_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -19,6 +22,7 @@ export interface CustomerFormData {
   alternate_phone?: string;
   email?: string;
   address?: string;
+  state?: string;
   city?: string;
   branch?: "south_bopal" | "tragad" | "both";
   notes?: string;
@@ -30,6 +34,7 @@ export interface CustomerFormErrors {
   alternate_phone?: string;
   email?: string;
   address?: string;
+  state?: string;
   city?: string;
   notes?: string;
 }

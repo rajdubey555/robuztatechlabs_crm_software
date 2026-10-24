@@ -1,184 +1,74 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { AppShell } from "@/components/layout/AppShell";
-import { Card, CardHeader, CardTitle, CardContent, Button, Badge, Alert, LoadingSpinner, Input } from "@/components/ui";
+import { Card, CardHeader, CardTitle, CardContent, Button, Badge, Alert, LoadingSpinner } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 import { Employee } from "@/types/employee";
+import {
+  Shield,
+  BarChart3,
+  Users,
+  Laptop,
+  FileText,
+  Package,
+  Store,
+  Settings,
+  Lock,
+  Unlock,
+  Check,
+  X,
+  Sparkles,
+  Search,
+  Save,
+  CheckCircle2,
+  AlertCircle,
+} from "lucide-react";
+import {
+  MODULES,
+  PermissionModule,
+  PermissionItem,
+  generateDefaultPermissions,
+  getRolePreset,
+} from "@/types/permissions";
+import { usePermissions } from "@/context/PermissionContext";
 
 export interface PermissionsClientProps {
   userEmail?: string;
 }
 
-export interface PermissionItem {
-  key: string;
-  label: string;
-  description: string;
-  defaultEnabled: boolean;
+function ModuleIcon({ name }: { name: PermissionModule["iconName"] }) {
+  const className = "w-4 h-4 text-[#009688]";
+  switch (name) {
+    case "BarChart3":
+      return <BarChart3 className={className} />;
+    case "Users":
+      return <Users className={className} />;
+    case "Laptop":
+      return <Laptop className={className} />;
+    case "FileText":
+      return <FileText className={className} />;
+    case "Package":
+      return <Package className={className} />;
+    case "Store":
+      return <Store className={className} />;
+    case "Shield":
+      return <Shield className={className} />;
+    case "Settings":
+      return <Settings className={className} />;
+    default:
+      return <Shield className={className} />;
+  }
 }
-
-export interface PermissionModule {
-  id: string;
-  pageName: string;
-  sidebarHref: string;
-  category: string;
-  icon: string;
-  mainKey: string;
-  mainLabel: string;
-  mainDescription: string;
-  permissions: PermissionItem[];
-}
-
-const MODULES: PermissionModule[] = [
-  {
-    id: "dashboard",
-    pageName: "Dashboard",
-    sidebarHref: "/dashboard",
-    category: "Dashboard & Overview",
-    icon: "📊",
-    mainKey: "dashboard.page_access",
-    mainLabel: "Dashboard Page Access",
-    mainDescription: "Allow staff member to open the main Dashboard page (/dashboard)",
-    permissions: [
-      { key: "dashboard.view_revenue", label: "View Revenue & Profit Statistics", description: "Access total earnings, monthly profit, and Job financial totals", defaultEnabled: true },
-      { key: "dashboard.view_activities", label: "View Recent Activity Feed", description: "See realtime system logs and customer repair activity", defaultEnabled: true },
-      { key: "dashboard.quick_actions", label: "Use Quick Action Buttons", description: "Access New Job, New Customer, and Quick Add buttons on dashboard", defaultEnabled: true },
-    ],
-  },
-  {
-    id: "customers",
-    pageName: "Customers",
-    sidebarHref: "/customers",
-    category: "Customers & Contacts",
-    icon: "👥",
-    mainKey: "customers.page_access",
-    mainLabel: "Customers Page Access",
-    mainDescription: "Allow staff member to access Customers list (/customers)",
-    permissions: [
-      { key: "customers.create", label: "Create Customer Profile", description: "Register new customer profiles into the CRM", defaultEnabled: true },
-      { key: "customers.edit", label: "Edit Customer Contact Info", description: "Update customer phone numbers, email, and address", defaultEnabled: true },
-      { key: "customers.delete", label: "Delete Customer Profile", description: "Permanently delete customer profiles from database", defaultEnabled: false },
-      { key: "customers.export", label: "Export Customer Directory", description: "Download customer database to Excel or CSV file", defaultEnabled: false },
-    ],
-  },
-  {
-    id: "devices",
-    pageName: "Devices",
-    sidebarHref: "/devices",
-    category: "Devices Directory",
-    icon: "📱",
-    mainKey: "devices.page_access",
-    mainLabel: "Devices Page Access",
-    mainDescription: "Allow staff member to access Customer Devices (/devices)",
-    permissions: [
-      { key: "devices.create", label: "Register New Device", description: "Add customer devices with brand, model, IMEI/Serial", defaultEnabled: true },
-      { key: "devices.edit", label: "Edit Device Details", description: "Modify device specs, passcode, and physical condition", defaultEnabled: true },
-      { key: "devices.delete", label: "Delete Device Entry", description: "Remove device records from the CRM", defaultEnabled: false },
-    ],
-  },
-  {
-    id: "device_catalog",
-    pageName: "Device Catalog",
-    sidebarHref: "/device-catalog",
-    category: "Master Device Catalog (Types, Brands & Models)",
-    icon: "📚",
-    mainKey: "device_catalog.page_access",
-    mainLabel: "Device Catalog Page Access",
-    mainDescription: "Allow staff member to access Master Device Catalog (/device-catalog)",
-    permissions: [
-      { key: "device_catalog.add_type", label: "Add Device Categories/Types", description: "Add new device categories (e.g., Smartwatch, Tablet, Laptop)", defaultEnabled: false },
-      { key: "device_catalog.add_brand", label: "Add New Brands", description: "Add new brands under categories (e.g., Apple, Samsung, OnePlus)", defaultEnabled: false },
-      { key: "device_catalog.add_model", label: "Add New Models", description: "Add new model names under brands (e.g., iPhone 16 Pro Max)", defaultEnabled: true },
-      { key: "device_catalog.delete", label: "Delete Catalog Entries", description: "Remove categories, brands, or models from dropdown defaults", defaultEnabled: false },
-    ],
-  },
-  {
-    id: "jobs",
-    pageName: "Jobs",
-    sidebarHref: "/jobs",
-    category: "Repair Jobs & Work Tickets",
-    icon: "📋",
-    mainKey: "jobs.page_access",
-    mainLabel: "Repair Jobs Page Access",
-    mainDescription: "Allow staff member to access Repair Jobs list (/jobs)",
-    permissions: [
-      { key: "jobs.create", label: "Create Job Card Tickets", description: "Intake new repair jobs and generate Job IDs", defaultEnabled: true },
-      { key: "jobs.edit", label: "Edit Job Complaints & Estimate", description: "Modify customer complaint notes, priority, and diagnostic fees", defaultEnabled: true },
-      { key: "jobs.assign", label: "Assign/Reassign Technician", description: "Assign job cards to specific workshop technicians", defaultEnabled: true },
-      { key: "jobs.update_status", label: "Update Repair Status", description: "Change status to Diagnosis, In Progress, Ready, or Delivered", defaultEnabled: true },
-      { key: "jobs.delete", label: "Delete Repair Ticket", description: "Permanently delete repair job cards from database", defaultEnabled: false },
-    ],
-  },
-  {
-    id: "part_requests",
-    pageName: "Part Requests",
-    sidebarHref: "/part-requests",
-    category: "Spare Part Procurement Requests",
-    icon: "🔩",
-    mainKey: "part_requests.page_access",
-    mainLabel: "Part Requests Page Access",
-    mainDescription: "Allow staff member to access Part Requests (/part-requests)",
-    permissions: [
-      { key: "part_requests.create", label: "Create Part Request", description: "Generate new spare part requests for repair jobs", defaultEnabled: true },
-      { key: "part_requests.update_status", label: "Change Request Status", description: "Update status to Pending, Ordered, Received, or Cancelled", defaultEnabled: true },
-      { key: "part_requests.bulk_actions", label: "Perform Bulk Actions", description: "Use Select All and bulk status update buttons", defaultEnabled: true },
-      { key: "part_requests.whatsapp_po", label: "Send WhatsApp Purchase Order", description: "Send single or bulk WhatsApp PO messages to vendors", defaultEnabled: true },
-      { key: "part_requests.add_vendor", label: "Add New Vendor", description: "Register new vendors directly from part request page", defaultEnabled: false },
-    ],
-  },
-  {
-    id: "vendors",
-    pageName: "Vendors",
-    sidebarHref: "/vendors",
-    category: "Vendor Directory & Suppliers",
-    icon: "🏬",
-    mainKey: "vendors.page_access",
-    mainLabel: "Vendors Page Access",
-    mainDescription: "Allow staff member to access Vendors page (/vendors)",
-    permissions: [
-      { key: "vendors.create", label: "Add New Vendor", description: "Create vendor profiles, phone numbers, and WhatsApp contacts", defaultEnabled: true },
-      { key: "vendors.edit", label: "Edit Vendor Info", description: "Update vendor business details, address, and ratings", defaultEnabled: true },
-      { key: "vendors.delete", label: "Delete Vendor Profile", description: "Remove vendor profiles from the CRM", defaultEnabled: false },
-    ],
-  },
-  {
-    id: "employees",
-    pageName: "Employees",
-    sidebarHref: "/employees",
-    category: "Employees & Staff Directory",
-    icon: "🛡️",
-    mainKey: "employees.page_access",
-    mainLabel: "Employees Page Access",
-    mainDescription: "Allow staff member to access Staff Directory (/employees)",
-    permissions: [
-      { key: "employees.view", label: "View Staff Directory", description: "See employee directory, job titles, and contact info", defaultEnabled: true },
-      { key: "employees.create", label: "Create Staff Account", description: "Add new staff accounts, set roles, and bank details", defaultEnabled: false },
-      { key: "employees.edit", label: "Edit Staff Details", description: "Modify staff salaries, phone numbers, and emergency contacts", defaultEnabled: false },
-      { key: "employees.delete", label: "Deactivate/Delete Staff Account", description: "Remove staff accounts from active directory", defaultEnabled: false },
-    ],
-  },
-  {
-    id: "permissions",
-    pageName: "Permissions",
-    sidebarHref: "/permissions",
-    category: "Roles & System Access Control",
-    icon: "⚙️",
-    mainKey: "permissions.page_access",
-    mainLabel: "Permissions Page Access",
-    mainDescription: "Allow staff member to access Permissions page (/permissions)",
-    permissions: [
-      { key: "permissions.manage_roles", label: "Configure & Save Staff Permissions", description: "Modify and save custom access toggles for other staff members", defaultEnabled: false },
-      { key: "permissions.apply_presets", label: "Apply Role Presets", description: "Use Technician and Manager preset templates", defaultEnabled: false },
-    ],
-  },
-];
 
 export function PermissionsClient({ userEmail }: PermissionsClientProps) {
   const supabase = createClient();
+  const { refreshPermissions } = usePermissions();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmpId, setSelectedEmpId] = useState<string>("");
@@ -191,6 +81,7 @@ export function PermissionsClient({ userEmail }: PermissionsClientProps) {
   useEffect(() => {
     async function loadData() {
       setLoading(true);
+      setErrorMessage(null);
       try {
         // Fetch current user details
         const { data: { user } } = await supabase.auth.getUser();
@@ -199,7 +90,7 @@ export function PermissionsClient({ userEmail }: PermissionsClientProps) {
             .from("employees")
             .select("role")
             .eq("email", user.email)
-            .single();
+            .maybeSingle();
 
           if (currentEmp?.role) {
             setUserRole(currentEmp.role);
@@ -213,48 +104,45 @@ export function PermissionsClient({ userEmail }: PermissionsClientProps) {
           .order("full_name", { ascending: true });
 
         if (empErr) throw empErr;
-
         const empList = (empData as Employee[]) || [];
         setEmployees(empList);
 
         if (empList.length > 0) {
           setSelectedEmpId(empList[0].id);
 
-          // Initialize default employee permissions
+          // Try to fetch saved permissions from staff_permissions table
+          const { data: savedPermsData } = await supabase
+            .from("staff_permissions")
+            .select("employee_id, permissions");
+
+          const savedPermsLookup: Record<string, Record<string, boolean>> = {};
+          if (savedPermsData && Array.isArray(savedPermsData)) {
+            savedPermsData.forEach((row: { employee_id: string; permissions: Record<string, boolean> }) => {
+              if (row.employee_id && row.permissions) {
+                savedPermsLookup[row.employee_id] = row.permissions;
+              }
+            });
+          }
+
+          // Also check localStorage for local offline sync
+          const localStored = localStorage.getItem("robuzta_staff_permissions");
+          const localLookup = localStored ? JSON.parse(localStored) : {};
+
           const initialMap: Record<string, Record<string, boolean>> = {};
           empList.forEach((emp) => {
-            const isAdminRole = emp.role === "admin";
-            const isManagerRole = emp.role === "manager";
-
-            const permMap: Record<string, boolean> = {};
-            MODULES.forEach((mod) => {
-              // Set Main Page Access
-              if (isAdminRole) {
-                permMap[mod.mainKey] = true;
-              } else if (isManagerRole) {
-                permMap[mod.mainKey] = mod.id !== "permissions";
-              } else {
-                permMap[mod.mainKey] = mod.id !== "employees" && mod.id !== "permissions";
-              }
-
-              // Set Sub-permissions
-              mod.permissions.forEach((p) => {
-                if (isAdminRole) {
-                  permMap[p.key] = true;
-                } else if (isManagerRole) {
-                  permMap[p.key] = p.key !== "permissions.manage_roles" && p.key !== "jobs.delete";
-                } else {
-                  permMap[p.key] = p.defaultEnabled;
-                }
-              });
-            });
-            initialMap[emp.id] = permMap;
+            const defaults = generateDefaultPermissions(emp);
+            initialMap[emp.id] = {
+              ...defaults,
+              ...(localLookup[emp.id] || {}),
+              ...(savedPermsLookup[emp.id] || {}),
+            };
           });
 
           setEmpPerms(initialMap);
         }
       } catch (err: unknown) {
-        console.error("Failed to load permissions:", err);
+        const msg = err instanceof Error ? err.message : "Failed to load permissions.";
+        setErrorMessage(msg);
       } finally {
         setLoading(false);
       }
@@ -263,15 +151,17 @@ export function PermissionsClient({ userEmail }: PermissionsClientProps) {
     loadData();
   }, [supabase]);
 
-  // Selected Employee object
   const selectedEmployee = employees.find((e) => e.id === selectedEmpId);
 
-  // Filtered employee list for search
-  const filteredEmployees = employees.filter((e) =>
-    e.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    e.employee_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    e.role.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredEmployees = useMemo(() => {
+    if (!searchQuery.trim()) return employees;
+    const q = searchQuery.toLowerCase().trim();
+    return employees.filter((e) =>
+      e.full_name.toLowerCase().includes(q) ||
+      e.employee_code.toLowerCase().includes(q) ||
+      e.role.toLowerCase().includes(q)
+    );
+  }, [employees, searchQuery]);
 
   const toggleEmployeePermission = (permKey: string) => {
     if (!selectedEmpId || userRole !== "admin") return;
@@ -285,32 +175,47 @@ export function PermissionsClient({ userEmail }: PermissionsClientProps) {
     }));
   };
 
-  const applyPreset = (preset: "all" | "none" | "tech" | "manager") => {
+  const toggleAllInModule = (mod: PermissionModule, targetState: boolean) => {
+    if (!selectedEmpId || userRole !== "admin") return;
+
+    setEmpPerms((prev) => {
+      const current = { ...(prev[selectedEmpId] || {}) };
+      current[mod.mainKey] = targetState;
+      mod.permissions.forEach((p) => {
+        current[p.key] = targetState;
+      });
+      return {
+        ...prev,
+        [selectedEmpId]: current,
+      };
+    });
+  };
+
+  const applyPreset = (preset: "all" | "none" | "technician" | "tech" | "manager" | "reception" | "purchase" | "accountant") => {
     if (!selectedEmpId) return;
 
-    const newPermMap: Record<string, boolean> = {};
-    MODULES.forEach((mod) => {
-      if (preset === "all") {
+    if (preset === "all") {
+      const newPermMap: Record<string, boolean> = {};
+      MODULES.forEach((mod) => {
         newPermMap[mod.mainKey] = true;
         mod.permissions.forEach((p) => (newPermMap[p.key] = true));
-      } else if (preset === "none") {
+      });
+      setEmpPerms((prev) => ({ ...prev, [selectedEmpId]: newPermMap }));
+      return;
+    }
+
+    if (preset === "none") {
+      const newPermMap: Record<string, boolean> = {};
+      MODULES.forEach((mod) => {
         newPermMap[mod.mainKey] = false;
         mod.permissions.forEach((p) => (newPermMap[p.key] = false));
-      } else if (preset === "tech") {
-        const hasAccess = ["dashboard", "customers", "devices", "device_catalog", "jobs", "part_requests", "vendors"].includes(mod.id);
-        newPermMap[mod.mainKey] = hasAccess;
-        mod.permissions.forEach((p) => {
-          newPermMap[p.key] = hasAccess && p.defaultEnabled;
-        });
-      } else if (preset === "manager") {
-        const hasAccess = mod.id !== "permissions";
-        newPermMap[mod.mainKey] = hasAccess;
-        mod.permissions.forEach((p) => {
-          newPermMap[p.key] = hasAccess && p.key !== "permissions.manage_roles" && p.key !== "jobs.delete";
-        });
-      }
-    });
+      });
+      setEmpPerms((prev) => ({ ...prev, [selectedEmpId]: newPermMap }));
+      return;
+    }
 
+    const roleName = preset === "tech" ? "technician" : preset;
+    const newPermMap = getRolePreset(roleName);
     setEmpPerms((prev) => ({
       ...prev,
       [selectedEmpId]: newPermMap,
@@ -318,13 +223,53 @@ export function PermissionsClient({ userEmail }: PermissionsClientProps) {
   };
 
   const handleSavePermissions = async () => {
-    if (!selectedEmployee) return;
+    if (!selectedEmployee || !selectedEmpId) return;
     setSaving(true);
-    // Simulate save to DB
-    await new Promise((r) => setTimeout(r, 600));
-    setSaving(false);
-    setToastMessage(`Permissions updated for ${selectedEmployee.full_name} (${selectedEmployee.employee_code})!`);
-    setTimeout(() => setToastMessage(null), 4000);
+    setErrorMessage(null);
+
+    const currentMap = empPerms[selectedEmpId] || {};
+
+    try {
+      // 1. Save to Supabase staff_permissions table
+      const { error: saveErr } = await supabase
+        .from("staff_permissions")
+        .upsert(
+          {
+            employee_id: selectedEmpId,
+            permissions: currentMap,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "employee_id" }
+        );
+
+      if (saveErr) {
+        console.warn("Could not save to staff_permissions DB table:", saveErr.message);
+      }
+
+      // 2. Persist in localStorage for instant fast retrieval (indexed by id and email)
+      try {
+        const existing = localStorage.getItem("robuzta_staff_permissions");
+        const parsed = existing ? JSON.parse(existing) : {};
+        parsed[selectedEmpId] = currentMap;
+        if (selectedEmployee.email) {
+          parsed[selectedEmployee.email.toLowerCase().trim()] = currentMap;
+        }
+        localStorage.setItem("robuzta_staff_permissions", JSON.stringify(parsed));
+      } catch (storageErr) {
+        console.warn("Local storage write error:", storageErr);
+      }
+
+      // 3. Immediately refresh app-wide permissions context so sidebar and guards update
+      await refreshPermissions();
+
+      setToastMessage(`Permissions saved successfully for ${selectedEmployee.full_name} (${selectedEmployee.employee_code})`);
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save permissions.";
+      setErrorMessage(msg);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const isAdmin = userRole === "admin";
@@ -332,98 +277,150 @@ export function PermissionsClient({ userEmail }: PermissionsClientProps) {
   return (
     <AppShell userEmail={userEmail}>
       <div className="space-y-5 w-full">
-        {/* HEADER BAR WITH TOP EMPLOYEE SELECTOR DROPDOWN */}
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
-            <div className="space-y-1">
-              <h1 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-                <span>🛡️</span> Staff Page Access & Feature Permissions
-              </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Configure sidebar page access and detailed sub-feature permissions for staff members.
-              </p>
+        {/* HEADER BAR */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900 space-y-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 flex items-center justify-center text-[#009688]">
+                <Shield className="w-5 h-5" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+                  Staff Access & Role Permissions
+                </h1>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Configure page-level navigation and granular feature access for every team member.
+                </p>
+              </div>
             </div>
 
-            {/* TOP EMPLOYEE SELECTOR DROPDOWN */}
-            <div className="flex items-center gap-3 w-full md:w-auto">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0 flex items-center gap-1.5">
-                <span>👤</span> Select Staff Member:
-              </label>
-
-              <select
-                value={selectedEmpId}
-                onChange={(e) => setSelectedEmpId(e.target.value)}
-                className="w-full md:w-80 px-3 py-2 text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-[#009688] text-slate-900 dark:text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-[#009688]/30 cursor-pointer shadow-2xs"
-              >
-                {employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.full_name} ({emp.employee_code}) — {emp.role.toUpperCase()}
-                  </option>
-                ))}
-              </select>
+            {/* TOP EMPLOYEE SELECTOR & ACTION BUTTONS */}
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <div className="relative min-w-[240px] sm:min-w-[280px]">
+                <select
+                  value={selectedEmpId}
+                  onChange={(e) => setSelectedEmpId(e.target.value)}
+                  className="w-full pl-3 pr-8 py-2 text-xs font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#009688] cursor-pointer shadow-2xs"
+                >
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.full_name} ({emp.employee_code}) • {emp.role.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               <Button
                 variant="primary"
                 size="sm"
                 onClick={handleSavePermissions}
                 isLoading={saving}
-                className="font-bold text-xs shrink-0"
+                className="h-8.5 text-xs font-semibold shrink-0 cursor-pointer"
               >
-                Save Permissions
+                <Save className="w-3.5 h-3.5 mr-1.5" />
+                Save Changes
               </Button>
             </div>
           </div>
 
-          {/* ACTIVE EMPLOYEE BANNER & PRESET BUTTONS */}
+          {/* ACTIVE EMPLOYEE SUMMARY & PRESET BUTTONS */}
           {selectedEmployee && (
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pt-1">
-              <div className="flex items-center gap-3.5">
-                <div className="w-11 h-11 rounded-xl bg-[#009688] text-white font-black text-lg flex items-center justify-center shadow-xs shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-teal-50 dark:bg-teal-950/40 text-[#009688] font-bold text-sm flex items-center justify-center border border-teal-200 dark:border-teal-800 shrink-0">
                   {selectedEmployee.full_name.charAt(0).toUpperCase()}
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                    <span className="text-sm font-bold text-slate-900 dark:text-white">
                       {selectedEmployee.full_name}
-                    </h3>
-                    <Badge variant="primary" className="font-mono text-xs">
+                    </span>
+                    <span className="font-mono text-[11px] font-semibold text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
                       {selectedEmployee.employee_code}
-                    </Badge>
-                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300 border border-teal-200 dark:border-teal-800 capitalize">
-                      Role: {selectedEmployee.role}
+                    </span>
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-teal-50 text-teal-800 dark:bg-teal-950/40 dark:text-teal-300 border border-teal-200 dark:border-teal-800 capitalize">
+                      {selectedEmployee.role}
                     </span>
                     {selectedEmployee.is_active ? (
-                      <Badge variant="success" className="text-[10px]">Active</Badge>
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                        Active
+                      </span>
                     ) : (
-                      <Badge variant="error" className="text-[10px]">Inactive</Badge>
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                        Inactive
+                      </span>
                     )}
                   </div>
                   <span className="text-xs text-slate-500 block mt-0.5">
-                    Email: <strong className="text-slate-700 dark:text-slate-300">{selectedEmployee.email || "N/A"}</strong>
-                    {selectedEmployee.specialization ? ` • ${selectedEmployee.specialization}` : ""}
+                    {selectedEmployee.email || "No email"} • {selectedEmployee.specialization ? `Spec: ${selectedEmployee.specialization}` : "General Repair"}
                   </span>
                 </div>
               </div>
 
-              {/* PRESET TEMPLATES BUTTONS */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-semibold text-slate-400 mr-1 hidden sm:inline">Apply Presets:</span>
-                <Button variant="outline" size="sm" onClick={() => applyPreset("tech")} className="text-xs font-semibold">
-                  Tech Preset
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => applyPreset("manager")} className="text-xs font-semibold">
-                  Manager Preset
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => applyPreset("all")} className="text-xs font-semibold text-teal-700 border-teal-200 hover:bg-teal-50">
-                  Enable All
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => applyPreset("none")} className="text-xs font-semibold text-rose-600 border-rose-200 hover:bg-rose-50">
+              {/* PRESET BUTTONS */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs font-medium text-slate-400 mr-1 hidden sm:inline">
+                  Presets:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => applyPreset("technician")}
+                  className="px-2.5 py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                >
+                  Technician
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset("reception")}
+                  className="px-2.5 py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                >
+                  Receptionist
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset("manager")}
+                  className="px-2.5 py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                >
+                  Manager
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset("purchase")}
+                  className="px-2.5 py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                >
+                  Purchase
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset("accountant")}
+                  className="px-2.5 py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                >
+                  Accountant
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset("all")}
+                  className="px-2.5 py-1 text-xs font-medium rounded-lg border border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-950/30 text-teal-800 dark:text-teal-300 hover:bg-teal-100/50 transition-colors"
+                >
+                  Admin (All)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset("none")}
+                  className="px-2.5 py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-colors"
+                >
                   Disable All
-                </Button>
+                </button>
               </div>
             </div>
           )}
         </div>
+
+        {errorMessage && (
+          <Alert variant="error" onClose={() => setErrorMessage(null)}>
+            {errorMessage}
+          </Alert>
+        )}
 
         {toastMessage && (
           <Alert variant="success" onClose={() => setToastMessage(null)}>
@@ -432,105 +429,160 @@ export function PermissionsClient({ userEmail }: PermissionsClientProps) {
         )}
 
         {loading ? (
-          <div className="flex justify-center items-center py-24">
+          <div className="flex flex-col justify-center items-center py-24 space-y-3">
             <LoadingSpinner size="lg" className="text-[#009688]" />
+            <p className="text-xs text-slate-400">Loading staff permissions...</p>
           </div>
         ) : !isAdmin ? (
-          /* ACCESS DENIED STATE FOR NON-ADMIN USERS */
-          <Card className="shadow-xs border-l-4 border-l-rose-500 w-full">
-            <CardContent className="p-8 text-center space-y-4">
-              <div className="w-16 h-16 rounded-full bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto text-2xl font-bold">
-                🔒
-              </div>
-              <div className="space-y-1 max-w-md mx-auto">
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                  Access Restricted — Admin Only
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Only System Administrators have access to configure staff permissions.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          /* RESTRICTED ACCESS */
+          <div className="rounded-xl border border-rose-200 bg-rose-50/30 dark:border-rose-900/40 dark:bg-rose-950/10 p-8 text-center space-y-3">
+            <div className="w-12 h-12 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto">
+              <Lock className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                Admin Privilege Required
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+                Only System Administrators can customize and modify staff role permissions.
+              </p>
+            </div>
+          </div>
         ) : (
-          /* FULL WIDTH PERMISSIONS MODULE CARDS LIST */
+          /* MODULE PERMISSION CARDS */
           <div className="space-y-4 w-full">
             {selectedEmployee ? (
               MODULES.map((mod) => {
                 const isPageAccessEnabled = empPerms[selectedEmpId]?.[mod.mainKey] ?? true;
+                const subPermsCount = mod.permissions.length;
+                const activeSubCount = mod.permissions.filter(
+                  (p) => empPerms[selectedEmpId]?.[p.key]
+                ).length;
 
                 return (
-                  <Card key={mod.id} className="shadow-xs overflow-hidden border border-slate-200 dark:border-slate-800 w-full">
-                    {/* MODULE HEADER WITH MAIN PAGE ACCESS TOGGLE */}
-                    <CardHeader className={`p-4 border-b transition-colors ${
-                      isPageAccessEnabled
-                        ? "bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-800"
-                        : "bg-rose-50/40 dark:bg-rose-950/20 border-rose-100 dark:border-rose-900/30"
-                    }`}>
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <span className="text-2xl">{mod.icon}</span>
-                          <div>
-                            <CardTitle className="text-base font-extrabold flex items-center gap-2 text-slate-900 dark:text-white">
-                              <span>{mod.category}</span>
-                              <span className="font-mono text-xs bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded font-bold text-slate-700 dark:text-slate-200">
-                                {mod.sidebarHref}
-                              </span>
-                            </CardTitle>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                              {mod.mainDescription}
-                            </p>
+                  <div
+                    key={mod.id}
+                    className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs overflow-hidden"
+                  >
+                    {/* MODULE HEADER BAR */}
+                    <div
+                      className={`p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors ${
+                        isPageAccessEnabled
+                          ? "bg-slate-50/70 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800"
+                          : "bg-slate-100/50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 opacity-75"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0">
+                          <ModuleIcon name={mod.iconName} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                              {mod.category}
+                            </span>
+                            <span className="font-mono text-[10px] bg-slate-200/70 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300">
+                              {mod.sidebarHref}
+                            </span>
+                            <span className="text-[11px] text-slate-400">
+                              ({activeSubCount}/{subPermsCount} enabled)
+                            </span>
                           </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            {mod.mainDescription}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* MAIN PAGE ACCESS TOGGLE + MODULE QUICK ACTIONS */}
+                      <div className="flex items-center gap-3 shrink-0 justify-between sm:justify-end">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => toggleAllInModule(mod, true)}
+                            className="px-2 py-0.5 text-[10px] font-medium text-slate-500 hover:text-teal-700 dark:hover:text-teal-300"
+                            title="Enable all permissions in this module"
+                          >
+                            All On
+                          </button>
+                          <span className="text-slate-300 dark:text-slate-700">•</span>
+                          <button
+                            type="button"
+                            onClick={() => toggleAllInModule(mod, false)}
+                            className="px-2 py-0.5 text-[10px] font-medium text-slate-500 hover:text-rose-600 dark:hover:text-rose-400"
+                            title="Disable all permissions in this module"
+                          >
+                            All Off
+                          </button>
                         </div>
 
-                        {/* MAIN PAGE ACCESS TOGGLE */}
-                        <div className="flex items-center gap-3 shrink-0">
-                          <span className={`text-xs font-bold px-3 py-1 rounded-full ${
-                            isPageAccessEnabled
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                              : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
-                          }`}>
-                            {isPageAccessEnabled ? "🔓 Page Access ON" : "🔒 Page Access OFF"}
+                        <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block" />
+
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md ${
+                              isPageAccessEnabled
+                                ? "bg-teal-50 text-teal-800 dark:bg-teal-950/40 dark:text-teal-300 border border-teal-200 dark:border-teal-800"
+                                : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                            }`}
+                          >
+                            {isPageAccessEnabled ? (
+                              <>
+                                <Unlock className="w-3 h-3 text-[#009688]" />
+                                Page Access ON
+                              </>
+                            ) : (
+                              <>
+                                <Lock className="w-3 h-3 text-slate-400" />
+                                Page Access OFF
+                              </>
+                            )}
                           </span>
 
                           <button
                             type="button"
                             onClick={() => toggleEmployeePermission(mod.mainKey)}
-                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                               isPageAccessEnabled ? "bg-[#009688]" : "bg-slate-300 dark:bg-slate-700"
                             }`}
                           >
                             <span
-                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                              className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
                                 isPageAccessEnabled ? "translate-x-5" : "translate-x-0"
                               }`}
                             />
                           </button>
                         </div>
                       </div>
-                    </CardHeader>
+                    </div>
 
-                    {/* SUB-PERMISSIONS LIST IN A HIGH-DENSITY GRID */}
-                    <CardContent className={`p-4 transition-opacity ${
-                      isPageAccessEnabled ? "opacity-100" : "opacity-40 pointer-events-none"
-                    }`}>
-                      <div className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 pt-2 pb-2.5 border-b border-slate-100 dark:border-slate-800 mb-3">
-                        Sub-Feature & Action Permissions:
-                      </div>
-
+                    {/* SUB-PERMISSIONS GRID */}
+                    <div
+                      className={`p-4 transition-opacity ${
+                        isPageAccessEnabled ? "opacity-100" : "opacity-40 pointer-events-none"
+                      }`}
+                    >
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                         {mod.permissions.map((perm) => {
                           const isSubEnabled = empPerms[selectedEmpId]?.[perm.key] ?? false;
                           return (
                             <div
                               key={perm.key}
-                              className="p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 flex items-center justify-between gap-3 hover:border-[#009688]/40 hover:bg-white dark:hover:bg-slate-900 transition-all shadow-2xs"
+                              className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 ${
+                                isSubEnabled && isPageAccessEnabled
+                                  ? "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
+                                  : "border-slate-100 dark:border-slate-850 bg-slate-50/50 dark:bg-slate-900/40"
+                              }`}
                             >
                               <div className="space-y-0.5 flex-1 pr-2">
-                                <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-[#009688] shrink-0" />
+                                <span className="text-xs font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                  <span
+                                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                      isSubEnabled && isPageAccessEnabled ? "bg-[#009688]" : "bg-slate-300 dark:bg-slate-600"
+                                    }`}
+                                  />
                                   {perm.label}
-                                </h4>
+                                </span>
                                 <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
                                   {perm.description}
                                 </p>
@@ -540,13 +592,13 @@ export function PermissionsClient({ userEmail }: PermissionsClientProps) {
                                 type="button"
                                 disabled={!isPageAccessEnabled}
                                 onClick={() => toggleEmployeePermission(perm.key)}
-                                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                                   isSubEnabled && isPageAccessEnabled ? "bg-[#009688]" : "bg-slate-300 dark:bg-slate-700"
                                 }`}
                               >
                                 <span
-                                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
-                                    isSubEnabled && isPageAccessEnabled ? "translate-x-4" : "translate-x-0"
+                                  className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                                    isSubEnabled && isPageAccessEnabled ? "translate-x-3.5" : "translate-x-0"
                                   }`}
                                 />
                               </button>
@@ -554,26 +606,26 @@ export function PermissionsClient({ userEmail }: PermissionsClientProps) {
                           );
                         })}
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 );
               })
             ) : (
-              <Card className="shadow-xs w-full">
-                <CardContent className="p-8 text-center text-slate-400 text-xs">
-                  Please select an employee from the dropdown above to configure permissions.
-                </CardContent>
-              </Card>
+              <div className="p-8 text-center text-slate-400 text-xs rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                Please select an employee above to configure permissions.
+              </div>
             )}
 
-            <div className="flex justify-end pt-3">
+            {/* BOTTOM SAVE BAR */}
+            <div className="flex justify-end pt-2">
               <Button
                 variant="primary"
                 size="md"
                 onClick={handleSavePermissions}
                 isLoading={saving}
-                className="min-w-[220px] font-bold text-sm"
+                className="font-semibold text-xs px-6"
               >
+                <Save className="w-3.5 h-3.5 mr-1.5" />
                 Save Staff Permissions
               </Button>
             </div>

@@ -7,6 +7,7 @@ import { Employee, getEmployeesWithWorkload, EmployeeSearch, EmployeeTable } fro
 import { AppShell } from "@/components/layout/AppShell";
 import { Button, Alert, LoadingSpinner, EmptyState } from "@/components/ui";
 import { useBranchContext } from "@/context/BranchContext";
+import { Users, UserCheck, Wrench, Shield, Plus, Key } from "lucide-react";
 
 export default function EmployeesListPage() {
   const { selectedBranch, selectedCategory, activeBranchInfo, activeCategoryInfo, isFiltered, clearFilters } = useBranchContext();
@@ -87,6 +88,12 @@ export default function EmployeesListPage() {
     });
   }, [employees, selectedBranch, searchQuery, selectedRole, selectedStatus, selectedSpecialization]);
 
+  // Metrics
+  const totalCount = employees.length;
+  const activeTechs = employees.filter((e) => e.role === "technician" && e.is_active).length;
+  const totalWorkload = employees.reduce((acc, e) => acc + (e.active_job_count || 0), 0);
+  const activeStaff = employees.filter((e) => e.is_active).length;
+
   const hasActiveFilters = Boolean(
     searchQuery.trim() || selectedRole || selectedStatus || selectedSpecialization || isFiltered
   );
@@ -101,33 +108,105 @@ export default function EmployeesListPage() {
 
   return (
     <AppShell userEmail={userEmail}>
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Employee Management
-            </h1>
-            {activeBranchInfo && (
-              <span className={`px-3 py-1 rounded-full text-xs font-bold border ${activeBranchInfo.badgeColor}`}>
-                📍 {activeBranchInfo.shortName}
-              </span>
-            )}
+      <div className="space-y-5 w-full">
+        {/* Page Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800 flex items-center justify-center text-[#009688]">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+                  Staff & Employee Directory
+                </h1>
+                {activeBranchInfo && (
+                  <span className="text-xs font-medium px-2.5 py-0.5 rounded-md bg-teal-50 dark:bg-teal-950/40 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                    {activeBranchInfo.shortName}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Staff profiles, role specializations, active workbench workloads, and access controls.
+              </p>
+            </div>
           </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Manage staff profiles, branch assignments, Drone/Laptop specializations, and job workloads
-          </p>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <Link href="/permissions">
+              <Button variant="outline" size="sm" className="h-8.5 text-xs font-semibold">
+                <Key className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
+                Staff Permissions
+              </Button>
+            </Link>
+
+            <Link href="/employees/new">
+              <Button variant="primary" size="sm" className="h-8.5 text-xs font-semibold">
+                <Plus className="w-3.5 h-3.5 mr-1.5" />
+                Add Employee
+              </Button>
+            </Link>
+          </div>
         </div>
 
-        <Link href="/employees/new">
-          <Button variant="primary" size="md">
-            <svg className="h-5 w-5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Employee
-          </Button>
-        </Link>
-      </div>
+        {/* Operational Metrics Strip */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="p-3 sm:p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex items-center justify-between">
+            <div>
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                Total Staff
+              </span>
+              <span className="text-xl font-bold font-sans tracking-tight text-slate-900 dark:text-white mt-0.5 block font-mono">
+                {totalCount}
+              </span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-teal-50 dark:bg-teal-950/40 text-[#009688] flex items-center justify-center shrink-0">
+              <Users className="w-4 h-4" />
+            </div>
+          </div>
+
+          <div className="p-3 sm:p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex items-center justify-between">
+            <div>
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                Active Techs
+              </span>
+              <span className="text-xl font-bold font-sans tracking-tight text-emerald-600 dark:text-emerald-400 mt-0.5 block font-mono">
+                {activeTechs}
+              </span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-500 flex items-center justify-center shrink-0">
+              <UserCheck className="w-4 h-4" />
+            </div>
+          </div>
+
+          <div className="p-3 sm:p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex items-center justify-between">
+            <div>
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                Active Workload
+              </span>
+              <span className="text-xl font-bold font-sans tracking-tight text-amber-600 dark:text-amber-400 mt-0.5 block font-mono">
+                {totalWorkload} jobs
+              </span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-500 flex items-center justify-center shrink-0">
+              <Wrench className="w-4 h-4" />
+            </div>
+          </div>
+
+          <div className="p-3 sm:p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex items-center justify-between">
+            <div>
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                Active Status
+              </span>
+              <span className="text-xl font-bold font-sans tracking-tight text-slate-900 dark:text-white mt-0.5 block font-mono">
+                {activeStaff} / {totalCount}
+              </span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
+              <Shield className="w-4 h-4 text-[#009688]" />
+            </div>
+          </div>
+        </div>
 
       {/* Error Alert */}
       {error && (
@@ -178,6 +257,7 @@ export default function EmployeesListPage() {
           }
         />
       )}
+      </div>
     </AppShell>
   );
 }

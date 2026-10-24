@@ -32,6 +32,10 @@ export interface PipelineCounts {
   received: number;
   diagnosis: number;
   diagnosed: number;
+  waiting_parts?: number;
+  in_progress?: number;
+  ready_for_delivery?: number;
+  delivered?: number;
   cancelled: number;
   unrepairable: number;
 }
