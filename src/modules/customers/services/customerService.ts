@@ -11,10 +11,10 @@ export interface CustomerHistoryResult {
 }
 
 /**
- * Fetch all customers ordered by created_at DESC
+ * Fetch all customers ordered by created_at DESC (Server or Client)
  */
-export async function getCustomers(): Promise<{ data: Customer[]; error: string | null }> {
-  const supabase = createClient();
+export async function getCustomers(client?: any): Promise<{ data: Customer[]; error: string | null }> {
+  const supabase = client || createClient();
   try {
     // 1. Try enriched fetch with related devices and jobs counts
     const { data: enrichedData, error: enrichedError } = await supabase

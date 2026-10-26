@@ -454,7 +454,7 @@ function CompanionUploadContent() {
         supabaseUploadSuccess = true;
         addLog("Broadcasting photos via Supabase Realtime Channel...");
         const channel = supabase.channel(`intake_${sessionId}`);
-        channel.subscribe(async (status) => {
+        channel.subscribe(async (status: any) => {
           if (status === "SUBSCRIBED") {
             await channel.send({
               type: "broadcast",

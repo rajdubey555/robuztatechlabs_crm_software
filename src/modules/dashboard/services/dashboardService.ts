@@ -7,13 +7,13 @@ import { Diagnosis } from "@/types/diagnosis";
 import { DashboardData } from "../types";
 
 /**
- * Fetch all data required for the executive dashboard in parallel
+ * Fetch all data required for the executive dashboard in parallel (Server or Client)
  */
-export async function getDashboardData(): Promise<{ data: DashboardData; error: string | null }> {
-  const supabase = createClient();
+export async function getDashboardData(client?: any): Promise<{ data: DashboardData; error: string | null }> {
+  const supabase = client || createClient();
   try {
-    const [jobsRes, custRes, devRes, empRes, diagRes, partsRes] = await Promise.all([
-      // 1. Repair jobs with customer, device & technician
+    const [jobsRes, empRes, diagRes, partsRes] = await Promise.all([
+      // 1. Repair jobs with customer, device & technician (Recent 200 for lightning-fast metrics)
       supabase
         .from("repair_jobs")
         .select(`
@@ -22,18 +22,16 @@ export async function getDashboardData(): Promise<{ data: DashboardData; error: 
           device:devices(id, device_code, brand, model, device_type),
           assigned_employee:employees!repair_jobs_assigned_employee_id_fkey(id, employee_code, full_name, role)
         `)
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: false })
+        .limit(200),
 
-      // 2. Customers
-      supabase.from("customers").select("*"),
+      // 2. Active Employees
+      supabase
+        .from("employees")
+        .select("id, employee_code, full_name, role, specialization, is_active")
+        .order("full_name", { ascending: true }),
 
-      // 3. Devices
-      supabase.from("devices").select("*"),
-
-      // 4. Employees
-      supabase.from("employees").select("*"),
-
-      // 5. Recent Diagnoses
+      // 3. Recent Diagnoses
       supabase
         .from("diagnoses")
         .select(`
@@ -43,11 +41,12 @@ export async function getDashboardData(): Promise<{ data: DashboardData; error: 
         .order("created_at", { ascending: false })
         .limit(5),
 
-      // 6. Part Requests
+      // 4. Recent Part Requests
       supabase
         .from("part_requests")
         .select("*")
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: false })
+        .limit(50),
     ]);
 
     if (jobsRes.error) throw jobsRes.error;
@@ -55,8 +54,8 @@ export async function getDashboardData(): Promise<{ data: DashboardData; error: 
     return {
       data: {
         jobs: (jobsRes.data as unknown as RepairJob[]) || [],
-        customers: (custRes.data as Customer[]) || [],
-        devices: (devRes.data as Device[]) || [],
+        customers: [],
+        devices: [],
         employees: (empRes.data as Employee[]) || [],
         recentDiagnoses: (diagRes.data as unknown as Diagnosis[]) || [],
         partRequests: (partsRes.data as unknown as any[]) || [],

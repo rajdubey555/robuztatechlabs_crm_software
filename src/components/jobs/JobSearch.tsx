@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Input, Select, Button } from "@/components/ui";
 import { Search, X, RotateCcw } from "lucide-react";
 
@@ -36,6 +37,27 @@ export function JobSearch({
   employeeOptions = [],
   onResetFilters,
 }: JobSearchProps) {
+  const [localSearch, setLocalSearch] = useState(searchTerm);
+
+  useEffect(() => {
+    setLocalSearch(searchTerm);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localSearch !== searchTerm) {
+        onSearchChange(localSearch);
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [localSearch, searchTerm, onSearchChange]);
+
+  const handleClear = () => {
+    setLocalSearch("");
+    onSearchChange("");
+  };
+
   const statusOptions = [
     { label: "All Statuses", value: "" },
     { label: "Received", value: "received" },
@@ -79,14 +101,14 @@ export function JobSearch({
         <div className="relative flex-1 max-w-lg">
           <Input
             placeholder="Search Job ID, Customer, Phone, Device, S/N..."
-            value={searchTerm}
-            onChange={(e) => onSearchChange(e.target.value)}
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
             startIcon={<Search className="w-4 h-4 text-slate-400" />}
             endIcon={
-              searchTerm ? (
+              localSearch ? (
                 <button
                   type="button"
-                  onClick={() => onSearchChange("")}
+                  onClick={handleClear}
                   className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 focus:outline-none"
                   aria-label="Clear search"
                 >

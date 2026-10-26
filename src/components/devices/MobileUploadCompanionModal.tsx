@@ -122,7 +122,7 @@ export function MobileUploadCompanionModal({
     // 1. Supabase Realtime WebSocket Channel (Instant delivery)
     const channel = supabase.channel(`intake_${sessionId}`);
     channel
-      .on("broadcast", { event: "photos_ready" }, async ({ payload }) => {
+      .on("broadcast", { event: "photos_ready" }, async ({ payload }: any) => {
         if (payload?.photos && Array.isArray(payload.photos) && payload.photos.length > 0) {
           console.log("[Modal] Received photos via Supabase Realtime broadcast!", payload.photos);
           const convertedFiles: File[] = [];

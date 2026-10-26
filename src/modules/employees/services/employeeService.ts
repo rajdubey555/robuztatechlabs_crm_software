@@ -6,8 +6,8 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 /**
  * Fetch all employees ordered by created_at DESC
  */
-export async function getEmployees(): Promise<{ data: Employee[]; error: string | null }> {
-  const supabase = createClient();
+export async function getEmployees(client?: any): Promise<{ data: Employee[]; error: string | null }> {
+  const supabase = client || createClient();
   try {
     const { data, error } = await supabase
       .from("employees")
@@ -25,10 +25,10 @@ export async function getEmployees(): Promise<{ data: Employee[]; error: string 
 }
 
 /**
- * Fetch employees with calculated active repair job workloads
+ * Fetch employees with calculated active repair job workloads (Server or Client)
  */
-export async function getEmployeesWithWorkload(): Promise<{ data: Employee[]; error: string | null }> {
-  const supabase = createClient();
+export async function getEmployeesWithWorkload(client?: any): Promise<{ data: Employee[]; error: string | null }> {
+  const supabase = client || createClient();
   try {
     // 1. Fetch employees
     const { data: empData, error: empError } = await supabase
@@ -50,7 +50,7 @@ export async function getEmployeesWithWorkload(): Promise<{ data: Employee[]; er
       .not("status", "in", '("delivered","closed","cancelled","unrepairable")');
 
     const workloadMap: Record<string, number> = {};
-    activeJobsData?.forEach((j) => {
+    activeJobsData?.forEach((j: { assigned_employee_id: string | null }) => {
       if (j.assigned_employee_id) {
         workloadMap[j.assigned_employee_id] = (workloadMap[j.assigned_employee_id] || 0) + 1;
       }

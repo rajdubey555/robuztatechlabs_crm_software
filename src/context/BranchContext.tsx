@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
 import { BranchId, CategoryType, BRANCHES, CATEGORIES } from "@/types/branch";
 
 interface BranchContextType {
@@ -61,23 +61,32 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
     setSelectedCategory("all");
   };
 
-  const activeBranchInfo = selectedBranch !== "all" ? BRANCHES[selectedBranch] : null;
-  const activeCategoryInfo = selectedCategory !== "all" ? CATEGORIES[selectedCategory] : null;
+  const activeBranchInfo = useMemo(() => {
+    return selectedBranch !== "all" ? BRANCHES[selectedBranch] : null;
+  }, [selectedBranch]);
+
+  const activeCategoryInfo = useMemo(() => {
+    return selectedCategory !== "all" ? CATEGORIES[selectedCategory] : null;
+  }, [selectedCategory]);
+
   const isFiltered = selectedBranch !== "all" || selectedCategory !== "all";
 
+  const contextValue = React.useMemo(
+    () => ({
+      selectedBranch,
+      selectedCategory,
+      setSelectedBranch,
+      setSelectedCategory,
+      activeBranchInfo,
+      activeCategoryInfo,
+      isFiltered,
+      clearFilters,
+    }),
+    [selectedBranch, selectedCategory, activeBranchInfo, activeCategoryInfo, isFiltered]
+  );
+
   return (
-    <BranchContext.Provider
-      value={{
-        selectedBranch,
-        selectedCategory,
-        setSelectedBranch,
-        setSelectedCategory,
-        activeBranchInfo,
-        activeCategoryInfo,
-        isFiltered,
-        clearFilters,
-      }}
-    >
+    <BranchContext.Provider value={contextValue}>
       {children}
     </BranchContext.Provider>
   );

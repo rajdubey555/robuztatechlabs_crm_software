@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Employee } from "@/types/employee";
 import {
@@ -29,6 +29,7 @@ const LOCAL_STORAGE_PERMISSIONS_KEY = "robuzta_staff_permissions";
 
 export function PermissionProvider({ children }: { children: React.ReactNode }) {
   const supabase = useMemo(() => createClient(), []);
+  const isRefreshingRef = useRef(false);
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [currentRole, setCurrentRole] = useState<string>("");
@@ -50,6 +51,8 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
 
   // Main loader for auth, employees, and permissions
   const refreshPermissions = useCallback(async () => {
+    if (isRefreshingRef.current) return;
+    isRefreshingRef.current = true;
     setIsLoading(true);
     try {
       // 1. Get current logged in user from Supabase Auth
@@ -185,6 +188,7 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
     } catch (err) {
       console.warn("Permission load notice:", err);
     } finally {
+      isRefreshingRef.current = false;
       setIsLoading(false);
     }
   }, [supabase]);
@@ -204,7 +208,7 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
+    } = supabase.auth.onAuthStateChange((event: any) => {
       if (event === "SIGNED_OUT") {
         setUserEmail(null);
         setCurrentRole("");
@@ -290,21 +294,35 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
     [isAdmin, permissions]
   );
 
+  const contextValue = useMemo(
+    () => ({
+      userEmail,
+      currentRole,
+      isAdmin,
+      currentEmployee,
+      employees,
+      permissions,
+      hasPermission,
+      canAccessPage,
+      refreshPermissions,
+      isLoading,
+    }),
+    [
+      userEmail,
+      currentRole,
+      isAdmin,
+      currentEmployee,
+      employees,
+      permissions,
+      hasPermission,
+      canAccessPage,
+      refreshPermissions,
+      isLoading,
+    ]
+  );
+
   return (
-    <PermissionContext.Provider
-      value={{
-        userEmail,
-        currentRole,
-        isAdmin,
-        currentEmployee,
-        employees,
-        permissions,
-        hasPermission,
-        canAccessPage,
-        refreshPermissions,
-        isLoading,
-      }}
-    >
+    <PermissionContext.Provider value={contextValue}>
       {children}
     </PermissionContext.Provider>
   );

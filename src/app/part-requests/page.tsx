@@ -10,5 +10,17 @@ export default async function PartRequestsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  return <PartRequestsPageClient userEmail={user?.email || undefined} />;
+  // Server-Side Data Fetching: Parallel fetch on Server
+  const [reqsRes, vendorsRes] = await Promise.all([
+    supabase.from("part_requests").select("*").order("created_at", { ascending: false }).limit(100),
+    supabase.from("vendors").select("*").order("name", { ascending: true }),
+  ]);
+
+  return (
+    <PartRequestsPageClient
+      initialRequests={reqsRes.data || []}
+      initialVendors={vendorsRes.data || []}
+      userEmail={user?.email || undefined}
+    />
+  );
 }

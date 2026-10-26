@@ -84,8 +84,8 @@ export const DEFAULT_CATALOG: CatalogItem[] = [
   { id: "def-66", device_type: "Drone", brand: "Parrot", model: "Anafi USA" },
 ];
 
-export async function fetchDeviceCatalog(): Promise<CatalogItem[]> {
-  const supabase = createClient();
+export async function fetchDeviceCatalog(client?: any): Promise<CatalogItem[]> {
+  const supabase = client || createClient();
   try {
     const { data, error } = await supabase
       .from("device_catalog")

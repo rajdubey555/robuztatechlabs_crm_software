@@ -285,7 +285,7 @@ export function CreatePartRequestModal({
             image_url: req.image_url,
           });
         } else {
-          const multiItems: MultiPartItem[] = insertedData.map((d) => ({
+          const multiItems: MultiPartItem[] = insertedData.map((d: any) => ({
             part_name: d.part_name,
             quantity: d.quantity,
             notes: d.notes,

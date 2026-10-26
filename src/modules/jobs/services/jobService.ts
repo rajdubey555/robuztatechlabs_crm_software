@@ -5,10 +5,10 @@ import { Diagnosis, DiagnosisFormData } from "@/types/diagnosis";
 import { PartRequest } from "@/types/partRequest";
 
 /**
- * Fetch all repair jobs with related customer, device, assigned employee, and diagnoses
+ * Fetch all repair jobs with related customer, device, assigned employee, and diagnoses (Server or Client)
  */
-export async function getJobs(): Promise<{ data: RepairJob[]; error: string | null }> {
-  const supabase = createClient();
+export async function getJobs(client?: any): Promise<{ data: RepairJob[]; error: string | null }> {
+  const supabase = client || createClient();
   try {
     const { data, error } = await supabase
       .from("repair_jobs")
@@ -56,7 +56,7 @@ export async function getJobs(): Promise<{ data: RepairJob[]; error: string | nu
       return { data: [], error: error.message };
     }
 
-    const formattedJobs: RepairJob[] = (data || []).map((j) => {
+    const formattedJobs: RepairJob[] = ((data as any[]) || []).map((j: any) => {
       const diagnosesList = j.diagnoses || [];
       const sortedDiagnoses = [...diagnosesList].sort(
         (a: Diagnosis, b: Diagnosis) =>

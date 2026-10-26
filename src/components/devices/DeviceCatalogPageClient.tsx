@@ -31,12 +31,14 @@ import {
   Download,
   Tag,
   Sparkles,
+  ChevronLeft,
   ChevronRight,
   Loader2,
 } from "lucide-react";
 
 interface DeviceCatalogPageClientProps {
   userEmail?: string;
+  initialCatalog?: CatalogItem[];
 }
 
 interface ExternalBrand {
@@ -53,11 +55,11 @@ interface ExternalModel {
   selected: boolean;
 }
 
-export function DeviceCatalogPageClient({ userEmail }: DeviceCatalogPageClientProps) {
+export function DeviceCatalogPageClient({ userEmail, initialCatalog }: DeviceCatalogPageClientProps) {
   const { selectedCategory } = useBranchContext();
 
-  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [catalog, setCatalog] = useState<CatalogItem[]>(initialCatalog || []);
+  const [loading, setLoading] = useState(!initialCatalog);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTypeFilter, setSelectedTypeFilter] = useState("ALL");
   const [selectedBrandFilter, setSelectedBrandFilter] = useState("ALL");
@@ -124,25 +126,46 @@ export function DeviceCatalogPageClient({ userEmail }: DeviceCatalogPageClientPr
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (!initialCatalog) {
+      loadData();
+    }
+  }, [initialCatalog]);
 
-  // Compute metrics & unique values
-  const uniqueTypes = Array.from(new Set(catalog.map((item) => item.device_type)));
-  const uniqueBrands = Array.from(new Set(catalog.map((item) => item.brand)));
+  // Pagination State for 60fps rendering
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 25;
 
-  // Filter items
-  const filteredCatalog = catalog.filter((item) => {
-    const matchesSearch =
-      item.model.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.device_type.toLowerCase().includes(searchQuery.toLowerCase());
+  // Compute metrics & unique values (memoized)
+  const uniqueTypes = useMemo(() => Array.from(new Set(catalog.map((item) => item.device_type))), [catalog]);
+  const uniqueBrands = useMemo(() => Array.from(new Set(catalog.map((item) => item.brand))), [catalog]);
 
-    const matchesType = selectedTypeFilter === "ALL" || item.device_type === selectedTypeFilter;
-    const matchesBrand = selectedBrandFilter === "ALL" || item.brand === selectedBrandFilter;
+  // Filter items (memoized)
+  const filteredCatalog = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return catalog.filter((item) => {
+      const matchesSearch =
+        !q ||
+        item.model.toLowerCase().includes(q) ||
+        item.brand.toLowerCase().includes(q) ||
+        item.device_type.toLowerCase().includes(q);
 
-    return matchesSearch && matchesType && matchesBrand;
-  });
+      const matchesType = selectedTypeFilter === "ALL" || item.device_type === selectedTypeFilter;
+      const matchesBrand = selectedBrandFilter === "ALL" || item.brand === selectedBrandFilter;
+
+      return matchesSearch && matchesType && matchesBrand;
+    });
+  }, [catalog, searchQuery, selectedTypeFilter, selectedBrandFilter]);
+
+  // Reset page when filters or search change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedTypeFilter, selectedBrandFilter]);
+
+  const totalPages = Math.ceil(filteredCatalog.length / pageSize) || 1;
+  const paginatedCatalog = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredCatalog.slice(start, start + pageSize);
+  }, [filteredCatalog, currentPage, pageSize]);
 
   // Load External Brands on Modal Open
   useEffect(() => {
@@ -593,14 +616,16 @@ export function DeviceCatalogPageClient({ userEmail }: DeviceCatalogPageClientPr
                     <input
                       type="checkbox"
                       checked={
-                        filteredCatalog.length > 0 &&
-                        filteredCatalog.every((item, idx) => selectedKeys.includes(getItemKey(item, idx)))
+                        paginatedCatalog.length > 0 &&
+                        paginatedCatalog.every((item, idx) => selectedKeys.includes(getItemKey(item, idx)))
                       }
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setSelectedKeys(filteredCatalog.map((item, idx) => getItemKey(item, idx)));
+                          const pageKeys = paginatedCatalog.map((item, idx) => getItemKey(item, idx));
+                          setSelectedKeys((prev) => Array.from(new Set([...prev, ...pageKeys])));
                         } else {
-                          setSelectedKeys([]);
+                          const pageKeys = new Set(paginatedCatalog.map((item, idx) => getItemKey(item, idx)));
+                          setSelectedKeys((prev) => prev.filter((k) => !pageKeys.has(k)));
                         }
                       }}
                       className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
@@ -619,8 +644,8 @@ export function DeviceCatalogPageClient({ userEmail }: DeviceCatalogPageClientPr
                       Loading catalog...
                     </td>
                   </tr>
-                ) : filteredCatalog.length > 0 ? (
-                  filteredCatalog.map((item, idx) => {
+                ) : paginatedCatalog.length > 0 ? (
+                  paginatedCatalog.map((item, idx) => {
                     const key = getItemKey(item, idx);
                     const isSelected = selectedKeys.includes(key);
 
@@ -688,8 +713,40 @@ export function DeviceCatalogPageClient({ userEmail }: DeviceCatalogPageClientPr
             </table>
           </div>
 
-          <div className="p-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-400">
-            <span>Showing {filteredCatalog.length} of {catalog.length} items</span>
+          <div className="p-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+            <span>
+              Showing {filteredCatalog.length > 0 ? (currentPage - 1) * pageSize + 1 : 0} to{" "}
+              {Math.min(currentPage * pageSize, filteredCatalog.length)} of {filteredCatalog.length} models
+              {catalog.length !== filteredCatalog.length ? ` (filtered from ${catalog.length})` : ""}
+            </span>
+
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="h-7 px-2 text-xs"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5 mr-1" />
+                  Prev
+                </Button>
+                <span className="px-2 py-1 text-xs font-mono font-medium text-slate-600 dark:text-slate-300">
+                  {currentPage} / {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="h-7 px-2 text-xs"
+                >
+                  Next
+                  <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                </Button>
+              </div>
+            )}
           </div>
         </Card>
       </div>

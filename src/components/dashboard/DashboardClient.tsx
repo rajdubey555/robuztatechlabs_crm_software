@@ -35,13 +35,16 @@ import { useBranchContext } from "@/context/BranchContext";
 import { usePermissions } from "@/context/PermissionContext";
 import { getDashboardData } from "@/modules/dashboard";
 
+import { DashboardData } from "@/modules/dashboard/types";
+
 export interface DashboardClientProps {
   userEmail?: string;
+  initialData?: DashboardData;
 }
 
 type TimeRange = "today" | "week" | "month" | "all";
 
-export function DashboardClient({ userEmail }: DashboardClientProps) {
+export function DashboardClient({ userEmail, initialData }: DashboardClientProps) {
   const router = useRouter();
   const { selectedBranch, selectedCategory } = useBranchContext();
   const { isAdmin, currentEmployee, currentRole, hasPermission } = usePermissions();
@@ -63,22 +66,30 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
     }
   }, [isUserAdmin]);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialData);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Core Data
-  const [jobs, setJobs] = useState<RepairJob[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [partRequests, setPartRequests] = useState<PartRequest[]>([]);
+  // Core Data initialized from Server Component (0ms latency, zero browser freeze)
+  const [jobs, setJobs] = useState<RepairJob[]>(initialData?.jobs || []);
+  const [customers, setCustomers] = useState<Customer[]>(initialData?.customers || []);
+  const [devices, setDevices] = useState<Device[]>(initialData?.devices || []);
+  const [employees, setEmployees] = useState<Employee[]>(initialData?.employees || []);
+  const [partRequests, setPartRequests] = useState<PartRequest[]>(initialData?.partRequests || []);
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
   const [chartTimeRange, setChartTimeRange] = useState<"7d" | "14d" | "30d">("7d");
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 180);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const loadData = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -103,8 +114,10 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (!initialData) {
+      loadData();
+    }
+  }, [initialData]);
 
   // Filtered by branch & category
   const branchAndCategoryJobs = useMemo(() => {
@@ -389,8 +402,8 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
       }
     }
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.toLowerCase().trim();
       result = result.filter((j) => {
         const code = j.job_code?.toLowerCase() || "";
         const name = j.customer?.full_name?.toLowerCase() || "";
@@ -401,7 +414,7 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
     }
 
     return result.slice(0, 10);
-  }, [scopedDisplayJobs, unassignedJobs, isUserAdmin, queueScope, statusFilter, searchQuery, timeFilteredJobs, employeeMetrics]);
+  }, [scopedDisplayJobs, unassignedJobs, isUserAdmin, queueScope, statusFilter, debouncedSearch, timeFilteredJobs, employeeMetrics]);
 
   // Helper for interactive KPI click-to-filter
   const handleCardClick = (targetStatus: string, forceScope?: "my" | "all" | "unassigned") => {

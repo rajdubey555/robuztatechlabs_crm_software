@@ -10,10 +10,10 @@ export interface DeviceHistoryResult {
 }
 
 /**
- * Fetch all registered devices with customer information
+ * Fetch all registered devices with customer information (Server or Client)
  */
-export async function getDevices(): Promise<{ data: Device[]; error: string | null }> {
-  const supabase = createClient();
+export async function getDevices(client?: any): Promise<{ data: Device[]; error: string | null }> {
+  const supabase = client || createClient();
   try {
     const { data, error } = await supabase
       .from("devices")

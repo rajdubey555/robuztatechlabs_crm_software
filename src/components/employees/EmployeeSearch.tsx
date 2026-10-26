@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Input, Select } from "@/components/ui";
 
 export interface EmployeeSearchProps {
@@ -23,6 +24,26 @@ export function EmployeeSearch({
   selectedSpecialization,
   onSpecializationChange,
 }: EmployeeSearchProps) {
+  const [localValue, setLocalValue] = useState(searchTerm);
+
+  useEffect(() => {
+    setLocalValue(searchTerm);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localValue !== searchTerm) {
+        onSearchChange(localValue);
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [localValue, searchTerm, onSearchChange]);
+
+  const handleClear = () => {
+    setLocalValue("");
+    onSearchChange("");
+  };
   const roleOptions = [
     { label: "All Roles", value: "" },
     { label: "Admin", value: "admin" },
@@ -55,17 +76,17 @@ export function EmployeeSearch({
       <div className="sm:col-span-1 md:col-span-1">
         <Input
           placeholder="Search Name, EMP ID, Phone..."
-          value={searchTerm}
-          onChange={(e) => onSearchChange(e.target.value)}
+          value={localValue}
+          onChange={(e) => setLocalValue(e.target.value)}
           startIcon={
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           }
           endIcon={
-            searchTerm ? (
+            localValue ? (
               <button
-                onClick={() => onSearchChange("")}
+                onClick={handleClear}
                 className="text-slate-400 hover:text-slate-600 focus:outline-none"
                 aria-label="Clear search"
               >

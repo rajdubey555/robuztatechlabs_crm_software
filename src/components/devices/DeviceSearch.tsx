@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Input, Select, Button } from "@/components/ui";
 import { Search, X, RotateCcw } from "lucide-react";
 
@@ -18,6 +19,27 @@ export function DeviceSearch({
   onTypeChange,
   onReset,
 }: DeviceSearchProps) {
+  const [localSearch, setLocalSearch] = useState(searchTerm);
+
+  useEffect(() => {
+    setLocalSearch(searchTerm);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localSearch !== searchTerm) {
+        onSearchChange(localSearch);
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [localSearch, searchTerm, onSearchChange]);
+
+  const handleClear = () => {
+    setLocalSearch("");
+    onSearchChange("");
+  };
+
   const typeOptions = [
     { label: "All Device Types", value: "" },
     { label: "Laptop", value: "Laptop" },
@@ -39,14 +61,14 @@ export function DeviceSearch({
         <div className="relative flex-1 max-w-md">
           <Input
             placeholder="Search Device ID, Brand, Model, Serial, Customer..."
-            value={searchTerm}
-            onChange={(e) => onSearchChange(e.target.value)}
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
             startIcon={<Search className="w-4 h-4 text-slate-400" />}
             endIcon={
-              searchTerm ? (
+              localSearch ? (
                 <button
                   type="button"
-                  onClick={() => onSearchChange("")}
+                  onClick={handleClear}
                   className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 focus:outline-none"
                   aria-label="Clear search"
                 >
